@@ -9,9 +9,9 @@ from requests.packages.urllib3.util.retry import Retry
 import socks
 import socket
 
-# API Keys 列表（留空，由用户填写）
+# API Keys
 API_KEYS = [
-    "gaia-MGQ5N2IyOTYtMDgyOS00NzUyLWI0YWUtNmY2MjRkZTdhNzA0-wdyjxGGDcQ4w3-Ub",
+ "gaia-MGQ5N2IyOTYtMDgyOS00NzUyLWI0YWUtNmY2MjRkZTdhNzA0-wdyjxGGDcQ4w3-Ub",
     "gaia-MmZiMGE0ZTMtYTg0MC00YzExLTk0NGYtYzkzZTEwMWY1MzUz-X6RpVbgO7u6aMPIc",
     "gaia-ODk3NTQyOWQtY2U1ZS00NmVmLWI5MTUtNzM2ZDcyMzgyM2Yz-P65qykVR-sflrLHJ",
     "gaia-ODUxZjUxYWItZWI4ZC00MTU4LThmNGUtNjgxODQxODhiZDNm-c8U2AoCA9GrXjTG2",
@@ -113,9 +113,9 @@ API_KEYS = [
     "gaia-NjMxNWMxMGEtM2FiNS00ZjJhLWFlZWEtZDI0NTgwMzA4Y2M5-n3GA35SqcBV4BzrF"
 ]
 
-# 问题列表（留空，由用户填写）
+# 问题列表
 QUESTIONS = [
-    "Who is the president of the United States",
+  "Who is the president of the United States",
     "What is the capital of Japan",
     "How does photosynthesis work",
     "Why is the sky blue",
@@ -236,16 +236,18 @@ PROXY_PASS = "76021475"
 socks.set_default_proxy(socks.SOCKS5, PROXY_HOST, PROXY_PORT, username=PROXY_USER, password=PROXY_PASS)
 socket.socket = socks.socksocket
 
+# 固定API端点
 URL = "https://gaias.gaia.domains/v1/chat/completions"
 
 # 计数器
 success_count = 0
 failure_count = 0
 start_time = time.time()
-first_minute_stats_displayed = False
+last_stats_time = start_time  # 
+stats_interval = 60  # 
 
 def chat_with_gaia(api_key, api_index, question, thread_id):
-    global success_count, failure_count, first_minute_stats_displayed
+    global success_count, failure_count
     headers = {
         "Authorization": f"Bearer {api_key}",
         "accept": "application/json",
@@ -256,88 +258,84 @@ def chat_with_gaia(api_key, api_index, question, thread_id):
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": question}
-        ]
+        ],
+        "max_tokens": 50  #
     }
     
     session = requests.Session()
-    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    retries = Retry(total=5, backoff_factor=2, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     
     try:
-        response = session.post(URL, headers=headers, json=data, timeout=30)
+        response = session.post(URL, headers=headers, json=data, timeout=15)  # 延长超时时间
         response.raise_for_status()
         success_count += 1
-        print(f"✅ 成功 {success_count} 次")
+        print(f"🎉🌟 [SUCCESS] ✅ 成功 {success_count} 次 🌈🎊")
         return "SUCCESS"
     except requests.exceptions.RequestException as e:
         failure_count += 1
-        print(f"❌ 失败 {failure_count} 次")
+        print(f"😞💥 [FAILURE] ❌ 失败 {failure_count} 次 ⚠️😣")
         if hasattr(e.response, 'status_code'):
             if e.response.status_code == 401:
-                print(f"[ERROR] API {api_index} 请求失败 | 状态: 401 | API认证失败")
-                return "STOP_401"
+                print(f"[ERROR] 🌐 API {api_index} 请求失败 | 状态: 401 | API认证失败 🚫")
+                return "FAILURE"  # 不停用API
             elif e.response.status_code == 402:
-                print(f"[ERROR] API {api_index} 请求失败 | 状态: 402 | API额度不足，需要支付")
-                return "STOP_402"
+                print(f"[ERROR] 💸 API {api_index} 请求失败 | 状态: 402 | API额度不足，需要支付 🚫")
+                return "FAILURE"  # 不停用API
+            elif e.response.status_code == 404:
+                print(f"[ERROR] 🕒 API {api_index} 请求失败 | 状态: 404 | 端点 {URL} 可能无效 🚫")
+                return "FAILURE"  # 不停用API
         return "FAILURE"
 
 def auto_chat_concurrent():
-    global success_count, failure_count, start_time, first_minute_stats_displayed
-    print("开始30线程并发聊天（SOCKS5动态代理，检测401和402错误，每次随机问题，仅计数） - 按 Ctrl+C 退出")
-    print(f"总问题数: {len(QUESTIONS)}, 总API数: {len(API_KEYS)}")
+    global success_count, failure_count, start_time, last_stats_time
+    print("🌍 开始动态线程并发聊天 - 按 Ctrl+C 退出 ✨")
+    print(f"📊 总问题数: {len(QUESTIONS)}, 总API数: {len(API_KEYS)} 🌟")
     
-    active_api_keys = API_KEYS.copy()  # 可用的API Key列表
+    active_api_keys = API_KEYS.copy()  # 使用所有API，不移除
     
     while True:
         try:
             if len(active_api_keys) < 30:
-                print(f"警告: 可用API数量 ({len(active_api_keys)}) 小于线程数 (30)")
+                print(f"⚠️ 警告: 可用API数量 ({len(active_api_keys)}) 小于线程数 (30) 🚨")
             
-            # 随机选择30个问题和对应的API Key
+            # 
             batch_questions = random.sample(QUESTIONS, min(30, len(QUESTIONS)))
             batch_api_keys = random.sample(active_api_keys, min(30, len(active_api_keys)))
             
-            # 使用线程池并发执行
+            # 
             with ThreadPoolExecutor(max_workers=30) as executor:
                 futures = [
                     executor.submit(chat_with_gaia, api_key, API_KEYS.index(api_key), q, i+1)
                     for i, (api_key, q) in enumerate(zip(batch_api_keys, batch_questions))
                 ]
                 
-                # 检查结果
+                # 
                 for future in futures:
-                    result = future.result()
-                    if result in ["STOP_401", "STOP_402"]:
-                        # 找到对应的API Key并移除
-                        for i, api_key in enumerate(active_api_keys):
-                            if API_KEYS.index(api_key) == futures.index(future):
-                                print(f"API {API_KEYS.index(api_key)} 已暂停使用")
-                                active_api_keys.pop(i)
-                                break
+                    future.result()
             
-            # 检查是否到达1分钟，并显示统计信息
-            elapsed_time = time.time() - start_time
-            if elapsed_time >= 60 and not first_minute_stats_displayed:
-                print(f"\n前1分钟统计: ✅ 成功 {success_count} 次, ❌ 失败 {failure_count} 次")
-                first_minute_stats_displayed = True
+            # 
+            current_time = time.time()
+            elapsed_time = current_time - last_stats_time
+            if elapsed_time >= stats_interval:
+                total_minutes = int((current_time - start_time) // 60) + 1
+                print(f"\n📈 第 {total_minutes} 分钟统计: 🎉✅ 成功 {success_count} 次 🌟, 😞❌ 失败 {failure_count} 次 ⚠️\n")
+                last_stats_time = current_time
             
-            # 如果没有可用API，退出
+            # 
             if not active_api_keys:
-                print("所有API均不可用（401或402错误），程序退出")
+                print("🚫 所有API均不可用，程序退出 💤")
                 break
             
-            # 批次之间的短暂等待
-            time.sleep(2)
-            
         except KeyboardInterrupt:
-            print(f"\n退出程序，总成功次数: ✅ {success_count} 次, 总失败次数: ❌ {failure_count} 次")
+            print(f"\n🎬 退出程序，总成功次数: 🎉✅ {success_count} 次 🌟, 总失败次数: 😞❌ {failure_count} 次 ⚠️")
             break
         except Exception as e:
-            print(f"主线程错误: {e}")
+            print(f"🛑 主线程错误: {e} 🚨")
             time.sleep(5)
 
 if __name__ == "__main__":
     if not API_KEYS or not QUESTIONS:
-        print("错误: 请在 API_KEYS 和 QUESTIONS 中填入数据")
+        print("❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据 🚫")
     else:
         auto_chat_concurrent()
