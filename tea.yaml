@@ -1,6 +1,350 @@
-# https://tea.xyz/what-is-this-file
----
-version: 1.0.0
-codeOwners:
-  - '0xa41811A47fc1eEF6c88AF75f673A0cBA1CB27B00'
-quorum: 1
+#!/usr/bin/env python3
+import requests
+import json
+import time
+import random
+from concurrent.futures import ThreadPoolExecutor
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+import socks
+import socket
+
+# API Keys 列表（留空，由用户填写）
+API_KEYS = [
+    "gaia-MGQ5N2IyOTYtMDgyOS00NzUyLWI0YWUtNmY2MjRkZTdhNzA0-wdyjxGGDcQ4w3-Ub",
+    "gaia-MmZiMGE0ZTMtYTg0MC00YzExLTk0NGYtYzkzZTEwMWY1MzUz-X6RpVbgO7u6aMPIc",
+    "gaia-ODk3NTQyOWQtY2U1ZS00NmVmLWI5MTUtNzM2ZDcyMzgyM2Yz-P65qykVR-sflrLHJ",
+    "gaia-ODUxZjUxYWItZWI4ZC00MTU4LThmNGUtNjgxODQxODhiZDNm-c8U2AoCA9GrXjTG2",
+    "gaia-YjYwNzJkMGEtM2EyMC00ZWQ2LTg5M2UtYWJmZjllYjZlYzI2-AucPdVxWC8jQqdbU",
+    "gaia-M2JlNjQ0ZDEtNDdkOS00ZDg2LTk0ZTQtNWU2MGJlYzUzM2U2-UGS6Wry-FoySqB8Q",
+    "gaia-MzQ5MzY1YzEtZjEyNC00ZTM4LTgyNDAtY2QwNGZkY2RiNmYx-kwxWuLAzSb9dblD6",
+    "gaia-NzdlNmMwM2MtZTE1OS00NjVmLWE4ODMtMWI5OWI1MWJjYmJk-qbGZywyo5WncOpon",
+    "gaia-OTIyNzljMWMtMzcwYS00NzVmLTgzYmUtNWM4ZWJiNzUxZTZi-HMstOT-cq4HEXKD6",
+    "gaia-YzI3NmFmZTAtMmYzYi00OTJkLWEyN2QtYWQ2YzA3NmMyOGI2-9_BQMFcVE6NJPpcM",
+    "gaia-YzMwODE5Y2YtYzgwMS00Yzk3LTk0MmYtMTE2MTI4YWE0M2Rh-qcs6MmtLw4ZXPvAI",
+    "gaia-MDk4ZDUyMDktMTc5OS00OWQ2LTg5ODUtZjA2MDg4OWEzNWVi-ALzTNiajXdazcg_G",
+    "gaia-NmVlOGMzYTktMzM0Yy00NmEyLTg3YjItMjM5ZGI5OGE2MGE1-WODkpRQWiC22UhiU",
+    "gaia-NTFhNjg3NjMtYzY0Zi00NmY4LTk2NjQtZjIzMzVjZTQ4YzIz-Bd9cLKK0BxDUL7He",
+    "gaia-YTU5NTBjN2UtMzhmZC00NjY5LWE2MGUtYWUzY2ExMzgxNGM1-ptwmnYU9qaLt-itB",
+    "gaia-ODAyM2ZiMTEtNjMzNC00ZDRkLWExZTctMWEzMzJiNzVmNjg5-5JFCAonOUXY4vMoK",
+    "gaia-ZjI1YjEyYTQtOTY1OS00OTE2LTlkNTktM2Q2ZGIwODM1MTE3-6Tdkiizf5Vt14a1v",
+    "gaia-YWNiNzAxMzItNjRhYS00N2M4LWFiYTktYmY5Njc4ODVmZDMx-fkaIySgcx0s0wWva",
+    "gaia-NGRmNDdjMWItODNiYi00OTNlLWI3OGEtY2IwNWY4NWZlM2I2-XNahpFlEmDdzkd7d",
+    "gaia-OTk0NWUwYjYtNjU5OC00ODZkLWE3MjYtNmViZWVhMzhjNWFi-tUiReTM6GQ4_RkUS",
+    "gaia-NzBkZmFhZGUtZTIxNS00YTBjLWIyOGItNjU2ZDgyMmMxZjM2-4WftIY1fsS8jhxXj",
+    "gaia-ZjM3NzRkNTYtYWY0MC00MjYwLWIzMGUtZjc0OGRiMDU2N2U3-H98Vj59g2vGwzCfZ",
+    "gaia-NmNiMjA1MWQtMjg0OC00NGRiLWIzNTctNTczMDYyZTk1MWZl-akNNazj4wogM0K7K",
+    "gaia-YmU0OGZlZDMtMzJhYy00MjI5LWFkNWQtNjEzODVhYjQ2ZGQz-73QKGjojHBuKEtgN",
+    "gaia-NjA0MTBhZmQtOGM1MS00MDdhLWE2N2ItYmU5MWUzMGU1MTU3-QLbKuNie9Lj9JD9F",
+    "gaia-MzI0NDZiNGMtODgxYi00ZGI1LWE3MTgtZmJjNWJlYTc1YmJm-PA9wHpNfsSpPW4CP",
+    "gaia-NTM0NjE1MWUtMzI1OC00MDVjLWFhODQtNzE2ZDMzMGRjZjhh-IYMd8ieLA1Tte5dn",
+    "gaia-ZTQ2Y2E0MTUtZTRjOS00YTAxLWE4YWEtNzM4MjYyZDJlZWJj-ari4Kv-CAO9C32s4",
+    "gaia-MTkzZjM5ZGMtNWIzYy00MjVmLTg2ZmUtNjBkNWY4ODdlODU1-LDCQ-f4Tj-dW7ZQ0",
+    "gaia-ZDM4MzNkYmQtMTYwOC00YWUyLTljODAtYThjZThmMzVmNmMw-7B3plw7dMhmnAQOF",
+    "gaia-MjBmNDFiMjEtNzA3ZS00NzA0LTgxZGQtMDAxYmYwYWMwNmNh-_5SIhnbRwh8mhR7n",
+    "gaia-MzlhNTFlYzMtZDgwYS00NzMzLWJlMGMtNDlkODRiZjhkZTc2-RlWQT5v1BH_PC81i",
+    "gaia-NGNiZTdiYmMtYTQ0OS00YzJiLWJkOTMtNjNkODhjMzUxMzk2-RfFtJz83qtNo74hd",
+    "gaia-MzI0ZjUxYzAtNzNhYS00NTgwLTg2YTEtYWZmNzc2ZTY4MTQ2-1pGNnCvkCbUXN1bj",
+    "gaia-MDY2NGE0OGMtNWYzMS00MTk2LWEyMjgtMjM1ZDE4NjljY2Uw-i_Gcdq2eq5XYj2mc",
+    "gaia-NjhlZjJlOGQtYTc0NS00ZDQ5LWE2ZjAtMzM0NGZkZmJmNmIw-3Y6MvvlApKrOTR3X",
+    "gaia-M2MxMzU1NzUtNThmMS00NmIzLTk4YTktZWY4YjI4Nzc4OGYz-1dyZSTB3JkYYXtIL",
+    "gaia-MjE4MzIyMWEtZmRhZi00MDlhLTg4YTgtNWQ1ODVhOGEzMjc5-_vSGW1zRBV-9a2b4",
+    "gaia-MTk2ZjlkMjgtN2EwOS00NzQ1LTkwZjUtY2U4NTdiOGE1ZDM0-ZXzT054DT5pikcDa",
+    "gaia-YjNiMjUxZjItOTY0Ny00ZjFiLWFjNzgtOWUxOGZmYzVhOGVk-tVjIC7jnrzQ7uscQ",
+    "gaia-OGJiNGJkNGMtZjU4Ny00NDA3LWIxYWYtNWU0NDBiOWE1MDFl-nU6ECFaowoI2jeYm",
+    "gaia-MDRjYWVkMWQtOGU1NS00NDAxLWJlZGMtYjE0NjQ0ODcxNjMz-IpU6r_kx6waf08Hx",
+    "gaia-MDc3NTg3MWMtMGZlMC00MzhmLWEwZDktYzcwNTI1ZjQxMGY1-gcaEqjUy9Pygyp1f",
+    "gaia-YWU4NzQ0OGUtZWE4Ni00MGFjLWE3NmYtZjA3Y2E2N2U1YjJk-e11ZwdTJjSlHuKnH",
+    "gaia-MjE2MDBkZWMtODQ2NS00OWE4LWJhZTYtZmViZDY4Yjc1NjA0-cmkqekLz0eGvq3hl",
+    "gaia-NzkwYzIxMTUtYjIxOS00OWU5LWFlOTQtY2VkMjI1MDZmODIx-S29tJtuiVjqU7ZsC",
+    "gaia-OWQ2MjdlMTAtZjUyZS00YjhlLTgxZTMtYzAzODIxOGYyMjJl-7hJlv2AoLfF5glzD",
+    "gaia-ZDMxZmZjNjQtOWZhOC00N2ZkLTk2MTgtYjg3MWJlMWQ5YzIx-KYJS46vKoM_JAT-F",
+    "gaia-OTZhOTQwNTctOGNhYi00ZmVmLWIyZDQtNjI1NDk3YWJhZmQ1-swax_vgRa4Qb7AKM",
+    "gaia-ZDEzYmMzMTgtYzRhNy00MmVhLTliZWYtZTk4MDA0NTMyMTRm-Uu6UthSTxykQiFW-",
+    "gaia-ZDAzYTJmZDEtOTAyMS00MzBmLTlhOGMtMWZjYWY2MDY2MjAx-ZbPPvU5T407kUGkV",
+    "gaia-MTI5ZmU4MjctMTA3Zi00M2ZlLTk1YzYtYmFiMTI4MDdkOGIz-OldIYbMaH9XABXPU",
+    "gaia-Nzc1Y2JhNGYtMTk2ZS00NTZlLTlhZjMtOTkzZWUwM2EyZGZi-fvOZeAg5QBgP-JG6",
+    "gaia-N2FiZjk3ZWUtZjg2Yi00MDI2LWFkMmUtNzFhNjAzMWM0YTdk-l-cjtro95kNC52pV",
+    "gaia-OTAwMWYxMjUtYWYwOC00MGIwLWJlN2YtNjcwMTBhMGRjNTli-mbITYuHEV-YbgBlh",
+    "gaia-NDRmNWRlNTUtMDRkYi00MGY0LWEwMjctODcxNWQ0NjM1NTM4-i9rKEUKDKx3qOy2n",
+    "gaia-ZGI5MTUxMDEtYWNjOC00Mzg3LWIzNDEtMzQ3OGZmY2Q4Yzk5-teqcHOdfj2XoFl3-",
+    "gaia-Yjg5MzFhNjQtZGU5YS00ZmUzLWE1ZGYtZDZhOTY4ZDc3MGVm-Ef8HvNhFSVPZ6peM",
+    "gaia-MWNlOTM5NjgtNjg2OS00MDg1LTg5YWEtMWE4ZDYyODlhM2I1-_OJLBhU9-Gq2ejA7",
+    "gaia-ODljNThjYzctOTQ5MC00NDcwLWI4ZjMtMDA5YTIxYzZiZjE1-CYEyKdHpgA5xu5HD",
+    "gaia-NzYxMjY5N2EtOTdlOC00NDAwLTk5NTctNWZjNmE2ZjUxY2Vi-57n2T7HezFP119Wl",
+    "gaia-ODVhZjBhMTYtYzRjMS00NDlmLTgzODMtYzdjOTcxZjhkMDQx-aLBOYM07vFFAKnZZ",
+    "gaia-NmIxNTU0NDgtZTk2Yy00NjUyLTllMjktZjYzNmY4MzVjZjE2-TgXx9blfiYYoF_T6",
+    "gaia-ODI1OTI1ZDQtYjU0Yi00M2JiLTg5YzItNTVlNTFhZjAzNjkx-TBnSAiX9LE-3E5T2",
+    "gaia-MGYwMmMzMzgtMDc2OS00OGZhLTlkYTktMWFmODI3ODMyNzE1-ZzM3Orn9jOIfSGw2",
+    "gaia-YzVhYzA0OGItYjVkNy00Y2E4LWE5NmUtZGMzMjc4MTAzZGUy-thRu2jXnGEdDDPJg",
+    "gaia-YTFmMjQ2NTktZjY3ZC00ZGU3LWFlZTgtMzNiZDAxY2Y3NWY1-hPdGMWSeb-9OEgua",
+    "gaia-YzQ3MDY4MmYtNGNlNC00YmIwLTg2MDItNWQyNTM3NDZkMDlm-QVKYYpnvjMefVwgG",
+    "gaia-NzQ5NjA0MzktMTU1NC00NjI4LWExMmMtNTI2NGNlY2NkMTZl-zDgNKzkOqdkP4hB7",
+    "gaia-MWU2MjcwMDctYWE2Ni00ODZmLTgyZDEtMGMwNzZhYzJlYmY5-XoHWsKx_jIFchJG2",
+    "gaia-ZTVjOTAzYjgtZWExNi00OGY2LThkMmYtZTAzODNlY2Y0NDk4-vyOlhgXN4CcWEmMv",
+    "gaia-NzA2M2RlOTAtMjkwMS00NDViLThjODktYTY1ZDc3MmUyZTdj-wUtvsaoABREoM5u7",
+    "gaia-ZTE2NjUyZGQtODA3OC00Y2EyLWE1MzctYjViOTI5ZmU5OTY4-Xq2JzWMLMBvcePL_",
+    "gaia-ZDAzNmNjMzYtMWYxNi00Y2ZiLWI1ZTQtYTcxNmEzNmRkNmJk-r65EBYo268zStZTK",
+    "gaia-MWYyYzExNTQtNTQ0ZS00NmU0LTg0MjQtYjYwMzk5ZWJmZGRj-CY4Iv8LerBnPc_9Q",
+    "gaia-NjM4ZGI0MmUtY2QxZi00MWY1LWFkODctZGE1Y2YxYWM2ZWRi-S_bLFeiig720zk-L",
+    "gaia-MDkzNzdhNTctZmE0OS00MmU5LTk1N2EtYjQwNzk5YTY0OWY0-YkLiOUttqQGhTet7",
+    "gaia-MjE4OWU1ZjktMDVhYy00NDU4LTg0ZDUtNGIzZjBmYWQ3NDBi-BYz7VRPPGz_mJY4f",
+    "gaia-MmEwYTc2MjktMTA3Yy00NWEwLWE1ZjQtZGFmYjljZTdmZmIy-k0ZidYOfiYnNnJjT",
+    "gaia-NTllODA5MWYtYTViOS00YmE1LThkMDktOTAyNDc2NWViY2Nk-0iwj27quMguqJKfr",
+    "gaia-NTY0Yjc5NzEtYjg1Zi00NjQxLWE5ZGYtNzkwMzk3NmYwOWI2-mej0ezwsSRmfGRxR",
+    "gaia-NjRkNjI4NjctOWYwNi00NDIyLWJkZWMtMjAxODQwZWJkODBl-qlI7rOGGu2iHNf3G",
+    "gaia-NTMzNDA0ZGUtNTA4ZC00ZjI1LWI4ODItZTlhMDc0M2I5NDE2-0pLDA6H60IguTlFN",
+    "gaia-NTVhNGZhNDEtZDY0Ni00NjE4LTkyMWUtOTI4MzhkNmU1Mzc3-0T8FnicbVxIy-F0X",
+    "gaia-ZmJjOWYxM2ItNDJkYi00YzU4LTk2ZDEtMTE1N2FjZDQ0NWZl-2oQm8J7PNq4lkw0Y",
+    "gaia-OTg2OWY3OTItNjk5Yy00YWMwLWE1NzktMTNmYmM1ZTk4MWI3-r3dzC4RdJfg7kTwv",
+    "gaia-NDQ1MGFmZTMtOTNlNi00MWNmLTk4ODctNzFlNzM2MDFiODMy-LiCudSoxn9DGl8yo",
+    "gaia-NjVhMzY2MTgtZTg5NS00YzVjLThkZjEtY2NhNWMxYmU5NTZi-Fz2IhgTT6pVa6w7a",
+    "gaia-YWZlMWIyYzYtMjkwYi00ZjU3LTkyY2MtYjA0Njg3MzhmNWM5-BJhoHbzcpJFjtpuV",
+    "gaia-MjQ1YTVjZTItNDc2MS00M2RhLTgzOWItMmNmNWVmMmE2NGU2-sJJtKJ_hqr6dhemC",
+    "gaia-OTQ1Mzg4ZDItYTFmYS00YTFkLWIxNWQtOTY2MDRhY2MwNDBm-3JKBtiATTAllq5Te",
+    "gaia-NzFmMDM3YjQtYWFiNC00ZTRkLThjMmEtY2FkYzBlOGU0ZTA4-lgkZQPDTuIF1ZXPN",
+    "gaia-NTQzYzI4YjUtMDU2NC00ODRkLWE5MDktZTdiZThmNWM5MjVl-m1yRuf-7ZvtCtGES",
+    "gaia-MjE2NGQ1YjYtM2JkNi00Mjc4LTg1YWItODg4ZTBhYTlkZjQ1-BkswH57vm0SF6bOZ",
+    "gaia-ZjhiMWU5YTgtYzYwMy00OWEwLWE4ZjEtNjUyZDE1N2ExMzg3-RtieFJdZddHNDnqa",
+    "gaia-YmE0OGI3ZTItMzg1My00MTk4LWEyMTUtN2IzNWI0MDIxNWNi-wLfhFLn_d6GIs92X",
+    "gaia-ZjkzODVjYjEtNzhhYi00MzExLTlhZjItYTE0Y2FiNjAyYjlh-vCVjV5wk-plsa-sa",
+    "gaia-ZmU0NDY0NWYtZDYxMC00OTgzLThkZGYtODBhMDM3NjRkZjE3-mrNNlhlADpMgu2gy",
+    "gaia-NTkzM2M4NjctYzg4MC00N2ViLTlkNzUtNmY0ODg0OWUyNDJj-IOzxVtjjhgNMhyth",
+    "gaia-NjMxNWMxMGEtM2FiNS00ZjJhLWFlZWEtZDI0NTgwMzA4Y2M5-n3GA35SqcBV4BzrF"
+]
+
+# 问题列表（留空，由用户填写）
+QUESTIONS = [
+    "Who is the president of the United States",
+    "What is the capital of Japan",
+    "How does photosynthesis work",
+    "Why is the sky blue",
+    "Who wrote the book 1984",
+    "Tell me a joke",
+    "Can you create a short bedtime story",
+    "What’s the best way to stay motivated",
+    "If you could time travel where would you go",
+    "What’s your favorite food",
+    "If I have 5 apples and give 2 away how many do I have left",
+    "What is 23 × 17",
+    "Can you explain gravity in simple words",
+    "How can I improve my memory",
+    "What are some easy exercises to stay fit",
+    "What are the best habits for success",
+    "Can you describe a futuristic city",
+    "Do you think AI will replace human jobs",
+    "How do you define happiness",
+    "What are the pros and cons of social media",
+    "What are black holes, and how do they form?",
+    "Explain the causes and effects of global warming.",
+    "What were the main causes of World War II?",
+    "How does the human brain process information and memory?",
+    "What is artificial intelligence, and how is it impacting modern society?",
+    "Explain the process of photosynthesis and its importance in the ecosystem.",
+    "How does the stock market work, and what factors influence stock prices?",
+    "What is quantum computing, and how is it different from classical computing?",
+    "Explain the theory of evolution and its significance in biology.",
+    "What are the major types of renewable energy sources, and how do they work?",
+    "How does the immune system fight against diseases?",
+    "What is the Big Bang Theory, and what evidence supports it?",
+    "How do governments manage a country’s economy, and what are fiscal and monetary policies?",
+    "What are the main principles of democracy, and why is it important?",
+    "How do airplanes fly? Explain the principles of aerodynamics.",
+    "What are the different layers of the Earth's atmosphere, and what are their characteristics?",
+    "How do volcanoes erupt, and what are the different types of volcanic eruptions?",
+    "What is the significance of the Industrial Revolution, and how did it change the world?",
+    "How does the human digestive system work, and what are its main organs?",
+    "What are the different types of economies (capitalism, socialism, communism), and how do they function?",
+    "Explain the process of DNA replication and why it is important for living organisms.",
+    "What are the major causes and consequences of deforestation?",
+    "How does climate change affect biodiversity and ecosystems?",
+    "What is the significance of space exploration, and what are some major space missions in history?",
+    "How does the internet work, and what are the key technologies behind it?",
+    "What are the effects of globalization on economies and cultures?",
+    "What is cybersecurity, and why is it important in today’s digital world?",
+    "How do electric cars work, and what are their benefits compared to traditional cars?",
+    "What are the causes and impacts of ocean pollution?",
+    "How does the human heart function, and what are its key components?",
+    "What is nanotechnology, and what are its applications in medicine and engineering?",
+    "How do vaccines work, and why are they important for public health?",
+    "What are the differences between renewable and non-renewable resources?",
+    "How do earthquakes occur, and what are the different types of seismic waves?",
+    "What are genetic modifications, and how do they impact agriculture and medicine?",
+    "Explain the process of the water cycle and its importance in nature.",
+    "What are some of the biggest technological advancements of the 21st century?",
+    "How do wireless communication technologies like 5G work?",
+    "What are the key differences between different world religions?",
+    "What are the main functions of the United Nations, and why was it formed?",
+    "What is cryptocurrency, and how does blockchain technology work?",
+    "How does artificial intelligence contribute to advancements in healthcare?",
+    "What are some of the most significant scientific discoveries of the last decade?",
+    "What is dark matter, and why is it important in astrophysics?",
+    "How do different types of governments (democracy, monarchy, dictatorship) operate?",
+    "What is the role of media in shaping public opinion and politics?",
+    "How do climate change agreements like the Paris Agreement help the environment?",
+    "What are the main principles of Einstein’s Theory of Relativity?",
+    "How do space telescopes like Hubble and James Webb help us explore the universe?",
+    "What is the history and significance of the Great Wall of China?",
+    "How does artificial intelligence impact the job market and employment trends?",
+    "What are the causes and effects of the Industrial and French Revolutions?",
+    "How do submarines work, and what are their uses in military and research?",
+    "What is the process of making and storing nuclear energy?",
+    "How does the process of genetic engineering work in medicine and agriculture?",
+    "What is the role of mitochondria in a cell, and why is it called the powerhouse?",
+    "How do climate patterns like El Niño and La Niña impact global weather?",
+    "What are the main challenges facing the world’s freshwater supply?",
+    "What is cybercrime, and what measures are taken to prevent it?",
+    "How does space travel affect the human body?",
+    "What are the key differences between socialism and communism?",
+    "How do forensic scientists solve crimes using DNA analysis?",
+    "What are the biggest challenges in developing a sustainable future?",
+    "How do black holes bend space and time, according to general relativity?",
+    "What are the major ethical concerns surrounding artificial intelligence?",
+    "How does deforestation contribute to climate change?",
+    "What are the effects of pollution on marine life?",
+    "How do wind turbines generate electricity?",
+    "What are the main goals of the European Union, and how does it function?",
+    "What is the importance of the ozone layer, and how can we protect it?",
+    "How do satellites help in weather forecasting?",
+    "What are the dangers of antibiotic resistance, and how can it be prevented?",
+    "How does the human body fight against infections and diseases?",
+    "What are the major theories about the origin of life on Earth?",
+    "How does artificial intelligence work in self-driving cars?",
+    "What is the role of big data in business and decision-making?",
+    "How do solar panels work, and what are their benefits?",
+    "What is the Fibonacci sequence, and where is it found in nature?",
+    "How do different cultures influence global cuisine and fashion trends?",
+    "What are the psychological effects of social media on human behavior?",
+    "How do electric generators convert mechanical energy into electrical energy?",
+    "What are the effects of war on a country’s economy and society?",
+    "How do historians study ancient civilizations and their cultures?",
+    "What is the process of desalination, and how can it solve water scarcity issues?",
+    "What are the main challenges of interstellar travel?",
+    "How do companies use artificial intelligence for customer service?",
+    "What are the ethical concerns related to genetic cloning?",
+    "How do environmental policies impact business and industries?",
+    "What is the role of women in history, and how has it evolved over time?"
+]
+
+# SOCKS5代理配置
+PROXY_HOST = "2f7121246ab53bad.abcproxy.vip"
+PROXY_PORT = 4950
+PROXY_USER = "ZHkxhTUspz-zone-abc"
+PROXY_PASS = "76021475"
+
+# 设置全局SOCKS5代理
+socks.set_default_proxy(socks.SOCKS5, PROXY_HOST, PROXY_PORT, username=PROXY_USER, password=PROXY_PASS)
+socket.socket = socks.socksocket
+
+# API端点
+URL = "https://gaias.gaia.domains/v1/chat/completions"
+
+# 计数器
+success_count = 0
+failure_count = 0
+start_time = time.time()
+last_stats_time = start_time  # 上次统计时间
+stats_interval = 60  # 每60秒统计一次
+
+def chat_with_gaia(api_key, api_index, question, thread_id):
+    global success_count, failure_count
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": question}
+        ],
+        "max_tokens": 100  # 减少响应长度，加速处理
+    }
+    
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504, 404], allowed_methods=["POST"])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    
+    try:
+        response = session.post(URL, headers=headers, json=data, timeout=10)  # 缩短超时时间
+        response.raise_for_status()
+        success_count += 1
+        print(f"🎉🌟 [SUCCESS] ✅ 成功 {success_count} 次 🌈🎊")
+        return "SUCCESS"
+    except requests.exceptions.RequestException as e:
+        failure_count += 1
+        print(f"😞💥 [FAILURE] ❌ 失败 {failure_count} 次 ⚠️😣")
+        if hasattr(e.response, 'status_code'):
+            if e.response.status_code == 401:
+                print(f"[ERROR] 🌐 API {api_index} 请求失败 | 状态: 401 | API认证失败 🚫")
+                return "STOP_401"
+            elif e.response.status_code == 402:
+                print(f"[ERROR] 💸 API {api_index} 请求失败 | 状态: 402 | API额度不足，需要支付 🚫")
+                return "STOP_402"
+            elif e.response.status_code == 404:
+                print(f"[ERROR] 🕒 API {api_index} 请求失败 | 状态: 404 | 端点可能无效 🚫")
+                return "STOP_404"
+        return "FAILURE"
+
+def auto_chat_concurrent():
+    global success_count, failure_count, start_time, last_stats_time
+    print("🌍 开始50线程并发聊天（SOCKS5动态代理，优化速度，每分钟统计） - 按 Ctrl+C 退出 ✨")
+    print(f"📊 总问题数: {len(QUESTIONS)}, 总API数: {len(API_KEYS)} 🌟")
+    
+    active_api_keys = API_KEYS.copy()  # 可用的API Key列表
+    
+    while True:
+        try:
+            if len(active_api_keys) < 50:
+                print(f"⚠️ 警告: 可用API数量 ({len(active_api_keys)}) 小于线程数 (50) 🚨")
+            
+            # 随机选择50个问题和对应的API Key
+            batch_questions = random.sample(QUESTIONS, min(50, len(QUESTIONS)))
+            batch_api_keys = random.sample(active_api_keys, min(50, len(active_api_keys)))
+            
+            # 使用线程池并发执行
+            with ThreadPoolExecutor(max_workers=50) as executor:  # 50线程
+                futures = [
+                    executor.submit(chat_with_gaia, api_key, API_KEYS.index(api_key), q, i+1)
+                    for i, (api_key, q) in enumerate(zip(batch_api_keys, batch_questions))
+                ]
+                
+                # 检查结果
+                for future in futures:
+                    result = future.result()
+                    if result in ["STOP_401", "STOP_402", "STOP_404"]:
+                        # 找到对应的API Key并移除
+                        for i, api_key in enumerate(active_api_keys):
+                            if API_KEYS.index(api_key) == futures.index(future):
+                                print(f"🚫 API {API_KEYS.index(api_key)} 已暂停使用 🔇")
+                                active_api_keys.pop(i)
+                                break
+            
+            # 检查是否到达统计间隔（每分钟）
+            current_time = time.time()
+            elapsed_time = current_time - last_stats_time
+            if elapsed_time >= stats_interval:
+                total_minutes = int((current_time - start_time) // 60) + 1
+                print(f"\n📈 第 {total_minutes} 分钟统计: 🎉✅ 成功 {success_count} 次 🌟, 😞❌ 失败 {failure_count} 次 ⚠️\n")
+                last_stats_time = current_time
+            
+            # 如果没有可用API，退出
+            if not active_api_keys:
+                print("🚫 所有API均不可用（401, 402或404错误），程序退出 💤")
+                break
+            
+            # 无批次等待
+            
+        except KeyboardInterrupt:
+            print(f"\n🎬 退出程序，总成功次数: 🎉✅ {success_count} 次 🌟, 总失败次数: 😞❌ {failure_count} 次 ⚠️")
+            break
+        except Exception as e:
+            print(f"🛑 主线程错误: {e} 🚨")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    if not API_KEYS or not QUESTIONS:
+        print("❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据 🚫")
+    else:
+        auto_chat_concurrent()
