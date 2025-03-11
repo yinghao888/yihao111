@@ -8,9 +8,100 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import socks
 import socket
+from datetime import datetime
 
 # API Keys 列表（留空，由用户填写）
 API_KEYS = [
+    "gaia-NWZhZmY5NzgtZmJlMi00ODdlLWI3MTQtZWMzZmQxZmE4ZTlh-iEzpQPQ-bL8PRczQ",
+    "gaia-YTY1NzhkMDAtNTNjMi00ZTAyLTg5OTYtODJmODhmZGM2NzUw-gegHvPzy9Px48qik",
+    "gaia-YzVhYmJmNzEtNDVjOC00YWY1LWIxN2ItODc3MzkzMWExMjk4-RiivUx5gCyKTp1Dp",
+    "gaia-Y2Q1MTQwNmItODc2Yi00YjI1LThiYWEtMWE1MjBmMjQ2NWZm-PU34_Wp0gGuvseCA",
+    "gaia-MTQ3MzAzZDQtNzk1NC00YTFiLThhMTYtMTcxNDc2OGQ5MTg2-M8unSeHUU5dE0Rgk",
+    "gaia-MWY1OTI4YzEtMThiYS00MmM2LWFmOTctMTg5M2EyM2FjMDNj-jX2J4sUUvi9WmSeA",
+    "gaia-Njk1NzI4MzQtZmViMC00YzkwLWIwM2UtNGU3ZTRkMmVjMjRi-zdzkBFC7vZ4O59-F",
+    "gaia-YWE0OGU4NjktODkwNy00YzYwLTkzZDgtNzg0N2U2Y2Q4MDA1-MwrZSIIiSjg0H-1V",
+    "gaia-NGYyYzBlZGEtYjJkYi00MGY4LWIxY2MtYWIzYjVjZThiZjM2-22wiwQnoUImaiO8p",
+    "gaia-NzlkNmNiZDgtMDJiYS00Y2UzLWFiZTQtYWI5ZWFiYWUxMWRl-05srtyRnQdHwb7am",
+    "gaia-ZjVhMGE0MDItMDNlNy00MDZmLThmNjAtZWVjNmNlYThmNDMx-BLDMpVikAt6z_ZTh",
+    "gaia-NDBjZDFiZWYtYWY4MS00NTVmLTgzNzktOGJiZjI1ODVmOTk1-FoVfUzfiMJfQRa84",
+    "gaia-YTdjNGY5MzYtMWNlZC00ZDA2LThmZDctODZjNTVlMjkyMjk3-JmO20mbHX0lF-HUB",
+    "gaia-NWFiZmU4NmYtZTg4NS00MjU2LTk3OTgtZDMzMjhlZjFkNWU1--0WQB79ZX1wo9Zt-",
+    "gaia-MTMwNjFiZjktYmE3ZC00NDBlLTk3NGQtYzEwYTZkMTVhNzFj-SwI68nsiDwT0Cu7S",
+    "gaia-MTlmZmJjMDctZTVhMC00YWNkLWJhZmEtMTA4NWJmMGNiZDc0-91frYHMa4KFMAPOK",
+    "gaia-NDViZGFlMTUtYTUxNC00ZTIwLWFlNDAtNjUxODVlYmFjZDZl-di-vGD_-kCpvDeZE",
+    "gaia-YTM0NDQ5ODktMGNkYy00ZjFlLThmZWItY2I1ZTE5ZDgwYjA5-cdC-DVZSj0mJL-dT",
+    "gaia-ZWU1YjE4NDEtYjIxMi00MTYwLWE3YjgtODU2NTE5NzZhZDc4-H6nX2RxQcsWDdpju",
+    "gaia-MWZkOGRiNmQtNDNjNS00MWRhLWI4NjYtNTZiMTU5NGQ5Yjc0-hWSWMI1oL9NskR2_",
+    "gaia-Y2VmMzhiZmItMzVjNy00Nzk1LWE1NGUtZDUxMTk0MTZlY2Yw-kfHoFMfgsUnWGh1v",
+    "gaia-NGQyNDM4ZTItOThiMC00M2M2LTg4M2ItNWVmYjBhYjhkNDBh-ab7ejAOk1ebIkBXU",
+    "gaia-ZmYwN2M3ZDctYjhmYi00OTg2LWEyODEtYTkxNjAzMzhhMDRi-Yt8fAsUW7h0R3tFw",
+    "gaia-NzczYTEzY2QtYjQ1NS00YjdkLTgxYjQtM2RkZjEzOTA5NzY2-6X0nv6p4u0Z2WtNJ",
+    "gaia-NTI5OTljYzMtOWZkNi00ZTQ2LThkMzEtZmJmMGRmZmU5MzYx-BZDAAhzp64geTYvg",
+    "gaia-ZmQ4MTQ3NDQtZjg0Yy00M2VlLWFiNzItYzdjODE0MWE2MjNi-K-czpgz3cV-g1sG0",
+    "gaia-NDYwNjg0MTMtYmQ2Yy00ZWMwLWIxNDctMzY5NjRiNjczZTRk-CJctcqB_GVatWzRz",
+    "gaia-MzEzZDRhMDQtYTdjNi00ZjVlLWIyN2EtYTcwNTJmMzQ4OTE2-iKhXw6NWDKhE9ayl",
+    "gaia-NGU4YWJkMDYtZjc3OS00Y2RjLWI3NjgtMGViMWI4MzU3ZmY4-uP5XHraam2zZKZtM",
+    "gaia-NDY5ZDEwMWQtNjA2Ni00MDQ0LWFmZjMtNDZiYTJmNjU4OWU3-kQikW6nuCe2Yu5Pz",
+    "gaia-YmVkMTM4ZWUtNDI0MS00YzcyLTg1NzAtNjIzNTllNzNhOTZh-V5OYB8KJK47mxyzV",
+    "gaia-ZGUxNjc4MzktNDM1Zi00YWNmLTk1MjYtYTNhNmYwNWUwOTMz-Kk51VekNInPs92LN",
+    "gaia-MjZlYjMwOWQtMDIyYi00N2QyLTliZmItNTU5MWU3MjEwN2Q5-7oF_i3lVq768M21M",
+    "gaia-ZDMxMjY4MDQtNDMxOS00NTRhLWJkNWQtZGM4NzE4N2M4NzIw-Uj8wCY53AXMPxGSY",
+    "gaia-NjMzYmZkNTEtM2FkNy00NDY3LTlhMDgtMWIyOGM5Mzc1YWU0-hGPshZWqEpHgeBXE",
+    "gaia-ZWYwMTc2NzItZGYxNi00NmNlLTgyMTItYzdiOWUwNTBiODk5-FeVOChz3qxhUV2mV",
+    "gaia-MGYwYmRjNjYtZmUyOC00MTgxLThmNGItOTM2YzQ1NmFkNTZi-LUnqOX5F1_ykwODT",
+    "gaia-YmFhY2QzYjUtYzBlZS00YWFmLWIyZTUtZjMwMTc1ZTIyNDZm-O2ZYPCBvtUzZOGFV",
+    "gaia-Y2ZjMTI4ZTItY2EzMi00Y2FhLWE5YTctNGQ5ZTNkNGI4YmE0-BqyzjrvL_nY07j8a",
+    "gaia-MmM0MjBiNmUtZGQ1Ni00OWI0LWE3NWQtMjJkZGZhMmM4N2Ni-mS-WvpeLflxDkx2l",
+    "gaia-MmRmMjFmZDItOGVmNC00OGYyLTg3ZTctNGFjMjU5ZWYzMWEz-cvoUMixwdGov1WrK",
+    "gaia-YWZlZGY4MzAtNjEyYS00OWVlLWEyM2EtMWE1YzJiNTQ4M2I2-N7v4PPLuRJQJ2hqU",
+    "gaia-OWYxNjVlOTQtMTYxNC00NmEzLWFiMjItMWVkODE4MWFkYzFi-8uogjS-Pf3rAFwbr",
+    "gaia-MWQwYjExZTAtMTYzMy00NTRkLTk3YjQtNDFmN2M3MTJjMDMx-XrBq0WeoIRr4fXIN",
+    "gaia-NTZlMWVkMDktYWQyYy00MjhlLTg1MjUtMmViYWRmYjViN2My-jE5rQ8fAfKtV5BsM",
+    "gaia-MTBjOGNjM2EtZDE0ZC00ZGE3LTgzMjEtYjk2ZjY5OTBlM2Q5-b84wtSo-xCZ_Zy7V",
+    "gaia-NzVlMTYzN2UtNmNjMy00YTFlLTg1ZGEtYjE0NzVmM2U0YmIw-gdqjrNA71Vw0Czjj",
+    "gaia-ZTIxMjhmZDAtM2RmMi00MjE3LWI4ZmUtM2E3NTI3ZThmNWNj-0ad_sDjJv6NNxn4u",
+    "gaia-YWY0NjE4YjQtZTFjYS00MGFhLWExNDQtMTEyMzE2ZTVjMDg5-XSUWlhFpeofQJa0I",
+    "gaia-MzNmNzhkOTQtM2EyZi00MTM2LThlMWEtMTIwYmE0MDRmNTQz-cCMzMbA35Ev5lp49",
+    "gaia-NTA0MTQyMmYtODVkYy00MDJiLThiODEtODg2OTk1MmMzZTE3-W_ieID9K3CZu_LEo",
+    "gaia-ZGRhYjRkODMtOTM1OS00MGM5LTk5ZmYtZmZjNmJiM2IxMDk4-4r1QwtEc1UWMqsHE",
+    "gaia-MDBhY2YyNzctZGE1OC00YjI0LTk3NjQtNTg1YWY3ZjUxMDBh-0ZCgdbUqGtutrZ2y",
+    "gaia-NDRkZmIzMzEtYWY0OS00ZjllLTg2MGQtYjY1NGZjMDk4NTk5-IFG9yMS7zDoct1fn",
+    "gaia-NDQzOWUyMDAtN2YzNy00ZjIyLTk1ZjYtNTdhZjAwYWJmZmQz-x6bMnYehe2E3ELrm",
+    "gaia-ZDI3ZDVmNmItMTY3OS00NmI3LTk1ZGMtYmQ2ZDYwMGU4MmY3-JHNxITIsctZFXJWO",
+    "gaia-MWQyZDA1NzAtOTVkZS00NmY5LWE2MDYtOWQ5NTEyZjcwODNh-8vm3Z4EmHy-Q3UYV",
+    "gaia-OTdlMzA3MTEtMGEzNy00YmI5LWJlMGItNjIwMzVmNGExYTg4-W_eQH_w5oKv6V8pJ",
+    "gaia-MGYwYWY5NGYtZTk0YS00ZGJmLTg4Y2MtNmI0YWQyZWRhYTM5-AKYQxVaNkqDmtDDc",
+    "gaia-MmI4NzAxOGYtMmZkNS00YjE1LTk2OWMtMDAxYjljYmQzYWRj-K1f17h879VmYpm--",
+    "gaia-NTcyNmZlYTYtMjU5Zi00ZDFiLTk0ZjQtN2QzY2VlNTUzOGVk-3tlrkKJIVNPJSr8M",
+    "gaia-NzhlYWIwNDEtNDJkNC00MjhhLWFiMjctOWFjMzJjZmZhNTI4--s9zC_KtgNqzR9Pg",
+    "gaia-YjYzZjQ4MGYtYmU5MC00ZjRhLWI3MjctZjk3MzdkY2I4YmVi-v-ppCvuM-gqEgeXl",
+    "gaia-MmEzZjk2MzgtZjM3My00MDM0LWFiNDgtYWRlZjQ4OTk1MTQx-dLRee5vuGmn8EqfQ",
+    "gaia-MDFiM2FjY2QtNjBkNC00MjQxLTljMDgtZmQ0ZGU2ZjMwNzlm-rx2rvKMEhLSHOgh1",
+    "gaia-YzRlNTAwNzMtYjZhMS00MGRjLWFmOGMtN2MxMWJkMWJjYWY2-aow9of2v9TNMdXuf",
+    "gaia-MTRiNzY3NWQtNmY5Ny00MmY0LWI1M2UtMzlkYjA3NzNlYWQ1-7q50or3KxzP8yGy5",
+    "gaia-YmIzNGYyYzQtMzFiNy00NzlmLWE5NzYtMDlkMzMyMGMzNjJj-QMLPV9VW_3yUPpHL",
+    "gaia-NTMxMmVjOWUtZmY2MC00ZDRlLTk4M2YtYzMyOWYyM2NiMGUx-6SQUzI92CkqzzYlA",
+    "gaia-MTAxOGIyNjktOTBhMS00ODMwLThmNGItMTI2MmY5MDJlNjFh-RiCLj3eGLiX42wmy",
+    "gaia-MGI5MzMyYTgtYTllZC00M2ZjLTg0OGUtMzkzOWRmNWY1MmY4-aGYbTz9fY5IDZv9j",
+    "gaia-YTZiNzA5NzItMGY0MS00NDcwLTkwMDctZjI5M2Y2Mzc0NWMy-Gk4RU6Mu1OREzCxP",
+    "gaia-Mzk0NGQ5NzQtMWI1MS00NGIxLWIxMmUtZmE3NDM4NWNjMzc1-K6Gy-OvvGxlVusPH",
+    "gaia-MmNiZjE2NGMtNmI4ZS00ODBkLWJkMzYtODhhNjM0YjAxNjYw-2xZT6cIDkAygoJVm",
+    "gaia-Y2E2MzE5NjctZmIyZi00YTljLWFjNmUtNWM4Y2RmNzQ4ZmJi-qBfCu6kCtB4ZtljO",
+    "gaia-NjdhODdlODAtNDIwOC00ZjVhLWFkZDYtZTYxMTA1MGVkZjMy-V0uhahjfWFYhQFGY",
+    "gaia-ZTgyZWRmZmMtNDk5Ny00NmQ2LWI2NGYtYjk1OGI1ZGM5NWRj-z20w7WwZR66kWd0D",
+    "gaia-NjA2OGZmZTAtNDMwYy00ODY3LWJiYTAtNmMyMDk4ZjRjZDc3-mnPEMwQOE97wbJEY",
+    "gaia-NGYzNTIyNmEtYjZkMC00ZTg5LTkzYjUtNGYzMTg2NzE4NDYw-3wG-tv4vcEXv0w62",
+    "gaia-NTllMjNkN2YtZDBjMC00ZTJjLWE1NjYtMjc5NmZhY2VlNjU0-DiOzUnz6fh87XFv9",
+    "gaia-OTkxN2RmZDMtMThmYy00OTZmLTg1OWQtNWFmMGYyYjlkZDll-ftFC0H7elF4bZ91I",
+    "gaia-YmJjMTM5ODAtZmZiMS00MDcyLTljNjktZDQwYjVjMmJjY2U4-rv3d0fFKQAmANLIo",
+    "gaia-ZjBmNWEyNjgtYmE0Ny00Y2E4LWI5YmItYTg2MTkxMDI1NWEx-Pm9h6zUCR2uDIaUg",
+    "gaia-YmMxYTU4ZmItMDA5ZS00MGEzLWE2YjQtMmFlMGMxMDQxOTFj-SaNW0stTS190m1zv",
+    "gaia-NjkxZjc5OWUtMmY2NC00NGZlLTkyZTAtNTBlMmY0YzUyYmIw-eoxCgeiPFnI8Htow",
+    "gaia-YTFjYWFjNDctN2M5YS00M2M1LThkNDctN2VmNGUxMWEzM2Ji-Uh0CXY7dZoiwtOCo",
+    "gaia-ZGYxNWNlMDUtMDg1ZS00Y2JiLThjOTYtMWMyMjZiNDA4YTll-9TJ1g01OlsqAiNaR",
+    "gaia-YTczOWYwOTgtY2QzOC00MThmLTg1ZDgtNzhiY2IwN2M5MTBh-gfEuWhCiPE8Wy83A",
+    "gaia-NzBlZWI5ZTktZjExZS00ODU5LWE5OTQtYjg5ZThlYWI3OTY0-GMNcvAVctTiOd1Kh",
+    "gaia-ZGUxNjc4MzktNDM1Zi00YWNmLTk1MjYtYTNhNmYwNWUwOTMz-Kk51VekNInPs92LN",
     "gaia-MGQ5N2IyOTYtMDgyOS00NzUyLWI0YWUtNmY2MjRkZTdhNzA0-wdyjxGGDcQ4w3-Ub",
     "gaia-MmZiMGE0ZTMtYTg0MC00YzExLTk0NGYtYzkzZTEwMWY1MzUz-X6RpVbgO7u6aMPIc",
     "gaia-ODk3NTQyOWQtY2U1ZS00NmVmLWI5MTUtNzM2ZDcyMzgyM2Yz-P65qykVR-sflrLHJ",
@@ -236,7 +327,7 @@ PROXY_PASS = "76021475"
 socks.set_default_proxy(socks.SOCKS5, PROXY_HOST, PROXY_PORT, username=PROXY_USER, password=PROXY_PASS)
 socket.socket = socks.socksocket
 
-# API端点
+# 固定API端点
 URL = "https://gaias.gaia.domains/v1/chat/completions"
 
 # 计数器
@@ -245,6 +336,26 @@ failure_count = 0
 start_time = time.time()
 last_stats_time = start_time  # 上次统计时间
 stats_interval = 60  # 每60秒统计一次
+
+# ANSI颜色代码
+class Colors:
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    PURPLE = '\033[95m'
+    RESET = '\033[0m'
+
+# 进度条函数
+def progress_bar(success, failure, width=50):
+    total = success + failure
+    if total == 0:
+        return "[暂无请求]"
+    success_ratio = success / total
+    success_width = int(width * success_ratio)
+    failure_width = width - success_width
+    return f"{Colors.GREEN}{'█' * success_width}{Colors.RED}{'█' * failure_width}{Colors.RESET} {success}/{total} ({success_ratio:.1%})"
 
 def chat_with_gaia(api_key, api_index, question, thread_id):
     global success_count, failure_count
@@ -256,55 +367,58 @@ def chat_with_gaia(api_key, api_index, question, thread_id):
     
     data = {
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "你是一个有用的助手。"},
             {"role": "user", "content": question}
         ],
-        "max_tokens": 100  # 减少响应长度，加速处理
+        "max_tokens": 50  # 减少响应长度
     }
     
     session = requests.Session()
-    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504, 404], allowed_methods=["POST"])
+    retries = Retry(total=5, backoff_factor=2, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        response = session.post(URL, headers=headers, json=data, timeout=10)  # 缩短超时时间
+        response = session.post(URL, headers=headers, json=data, timeout=15)  # 延长超时时间
         response.raise_for_status()
         success_count += 1
-        print(f"🎉🌟 [SUCCESS] ✅ 成功 {success_count} 次 🌈🎊")
+        print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.GREEN}🎉【成功】线程-{thread_id} | 第{success_count}次成功 🌟{Colors.RESET}")
         return "SUCCESS"
     except requests.exceptions.RequestException as e:
         failure_count += 1
-        print(f"😞💥 [FAILURE] ❌ 失败 {failure_count} 次 ⚠️😣")
+        print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.RED}💥【失败】线程-{thread_id} | 第{failure_count}次失败 ⚠️{Colors.RESET}")
         if hasattr(e.response, 'status_code'):
             if e.response.status_code == 401:
-                print(f"[ERROR] 🌐 API {api_index} 请求失败 | 状态: 401 | API认证失败 🚫")
-                return "STOP_401"
+                print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.YELLOW}⚠️【错误】API {api_index} | 状态: 401 | API认证失败 🚫{Colors.RESET}")
+                return "FAILURE"
             elif e.response.status_code == 402:
-                print(f"[ERROR] 💸 API {api_index} 请求失败 | 状态: 402 | API额度不足，需要支付 🚫")
-                return "STOP_402"
+                print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.YELLOW}⚠️【错误】API {api_index} | 状态: 402 | API额度不足，需要充值 🚫{Colors.RESET}")
+                return "FAILURE"
             elif e.response.status_code == 404:
-                print(f"[ERROR] 🕒 API {api_index} 请求失败 | 状态: 404 | 端点可能无效 🚫")
-                return "STOP_404"
+                print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.YELLOW}⚠️【错误】API {api_index} | 状态: 404 | 端点 {URL} 可能无效 🚫{Colors.RESET}")
+                return "FAILURE"
         return "FAILURE"
 
 def auto_chat_concurrent():
     global success_count, failure_count, start_time, last_stats_time
-    print("🌍 开始50线程并发聊天（SOCKS5动态代理，优化速度，每分钟统计） - 按 Ctrl+C 退出 ✨")
-    print(f"📊 总问题数: {len(QUESTIONS)}, 总API数: {len(API_KEYS)} 🌟")
+    print(f"{Colors.BLUE}🚀 使用SOCKS5代理启动并发聊天（60线程，固定端点，每分钟统计） - 按 Ctrl+C 退出 ✨{Colors.RESET}")
+    print(f"{Colors.CYAN}📊 总问题数: {len(QUESTIONS)} | 总API数: {len(API_KEYS)} 🌟{Colors.RESET}")
+    print(f"{Colors.YELLOW}🔧 代理信息: {PROXY_USER}@{PROXY_HOST}:{PROXY_PORT}{Colors.RESET}")
+    print(f"{Colors.YELLOW}📡 端点: {URL}{Colors.RESET}\n")
     
-    active_api_keys = API_KEYS.copy()  # 可用的API Key列表
+    active_api_keys = API_KEYS.copy()  # 使用所有API，不移除
     
     while True:
         try:
-            if len(active_api_keys) < 50:
-                print(f"⚠️ 警告: 可用API数量 ({len(active_api_keys)}) 小于线程数 (50) 🚨")
+            if len(active_api_keys) < 60:
+                print(f"{Colors.YELLOW}⚠️ 注意: 可用API数量 ({len(active_api_keys)}) 小于线程数 (60) 🚨{Colors.RESET}")
             
-            # 随机选择50个问题和对应的API Key
-            batch_questions = random.sample(QUESTIONS, min(50, len(QUESTIONS)))
-            batch_api_keys = random.sample(active_api_keys, min(50, len(active_api_keys)))
+            # 随机选择所有可用问题和API Key
+            batch_questions = random.sample(QUESTIONS, min(60, len(QUESTIONS)))
+            batch_api_keys = random.sample(active_api_keys, min(60, len(active_api_keys)))
             
-            # 使用线程池并发执行
-            with ThreadPoolExecutor(max_workers=50) as executor:  # 50线程
+            # 使用线程池并发执行，动态调整线程数
+            with ThreadPoolExecutor(max_workers=60) as executor:
                 futures = [
                     executor.submit(chat_with_gaia, api_key, API_KEYS.index(api_key), q, i+1)
                     for i, (api_key, q) in enumerate(zip(batch_api_keys, batch_questions))
@@ -312,39 +426,36 @@ def auto_chat_concurrent():
                 
                 # 检查结果
                 for future in futures:
-                    result = future.result()
-                    if result in ["STOP_401", "STOP_402", "STOP_404"]:
-                        # 找到对应的API Key并移除
-                        for i, api_key in enumerate(active_api_keys):
-                            if API_KEYS.index(api_key) == futures.index(future):
-                                print(f"🚫 API {API_KEYS.index(api_key)} 已暂停使用 🔇")
-                                active_api_keys.pop(i)
-                                break
+                    future.result()  # 仅检查结果，不移除API
             
             # 检查是否到达统计间隔（每分钟）
             current_time = time.time()
             elapsed_time = current_time - last_stats_time
             if elapsed_time >= stats_interval:
                 total_minutes = int((current_time - start_time) // 60) + 1
-                print(f"\n📈 第 {total_minutes} 分钟统计: 🎉✅ 成功 {success_count} 次 🌟, 😞❌ 失败 {failure_count} 次 ⚠️\n")
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"\n{Colors.BLUE}📈 🕒[{timestamp}] 第{total_minutes}分钟统计: {Colors.GREEN}成功: {success_count}次 🎉 {Colors.RED}失败: {failure_count}次 ⚠️{Colors.RESET}")
+                print(f"{Colors.CYAN}📊 成功率: {progress_bar(success_count, failure_count)}{Colors.RESET}")
+                print(f"{Colors.YELLOW}⏳ 运行时长: {int(current_time - start_time)}秒{Colors.RESET}\n")
                 last_stats_time = current_time
             
             # 如果没有可用API，退出
             if not active_api_keys:
-                print("🚫 所有API均不可用（401, 402或404错误），程序退出 💤")
+                print(f"{Colors.RED}🚫 所有API均不可用，程序退出 💤{Colors.RESET}")
                 break
             
-            # 无批次等待
-            
         except KeyboardInterrupt:
-            print(f"\n🎬 退出程序，总成功次数: 🎉✅ {success_count} 次 🌟, 总失败次数: 😞❌ {failure_count} 次 ⚠️")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"\n{Colors.BLUE}🎬 🕒[{timestamp}] 程序已退出 | 总成功: {Colors.GREEN}{success_count}次 🎉{Colors.RESET} | 总失败: {Colors.RED}{failure_count}次 ⚠️{Colors.RESET}")
+            print(f"{Colors.YELLOW}⏳ 总运行时长: {int(time.time() - start_time)}秒{Colors.RESET}")
             break
         except Exception as e:
-            print(f"🛑 主线程错误: {e} 🚨")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{Colors.RED}🛑 🕒[{timestamp}] 主线程错误: {e} 🚨{Colors.RESET}")
             time.sleep(5)
 
 if __name__ == "__main__":
     if not API_KEYS or not QUESTIONS:
-        print("❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据 🚫")
+        print(f"{Colors.RED}❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据 🚫{Colors.RESET}")
     else:
         auto_chat_concurrent()
