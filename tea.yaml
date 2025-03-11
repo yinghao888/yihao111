@@ -9,6 +9,7 @@ from requests.packages.urllib3.util.retry import Retry
 import socks
 import socket
 from datetime import datetime
+import pytz
 
 # API Keys 列表（留空，由用户填写）
 API_KEYS = [
@@ -380,7 +381,9 @@ def chat_with_gaia(api_key, api_index, question, thread_id):
     retries = Retry(total=5, backoff_factor=2, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    # 设置北京时间（CST, UTC+8）
+    beijing_tz = pytz.timezone('Asia/Shanghai')
+    timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
     try:
         response = session.post(URL, headers=headers, json=data, timeout=15)  # 延长超时时间
         response.raise_for_status()
@@ -435,7 +438,8 @@ def auto_chat_concurrent():
             elapsed_time = current_time - last_stats_time
             if elapsed_time >= stats_interval:
                 total_minutes = int((current_time - start_time) // 60) + 1
-                timestamp = datetime.now().strftime("%H:%M:%S")
+                beijing_tz = pytz.timezone('Asia/Shanghai')
+                timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
                 print(f"\n{Colors.BLUE}📈 🕒[{timestamp}] 第{total_minutes}分钟统计: {Colors.GREEN}成功: {success_count}次 🎉 {Colors.RED}失败: {failure_count}次 ⚠️{Colors.RESET}")
                 print(f"{Colors.CYAN}📊 本分钟完成: {Colors.GREEN}{minute_success}次成功 🎉 {Colors.RED}{minute_failure}次失败 ⚠️{Colors.RESET}")
                 print(f"{Colors.CYAN}📊 成功率: {progress_bar(success_count, failure_count)}{Colors.RESET}")
@@ -447,16 +451,20 @@ def auto_chat_concurrent():
             
             # 如果没有可用API，退出
             if not active_api_keys:
-                print(f"{Colors.RED}🚫 所有API均不可用，程序退出 💤{Colors.RESET}")
+                beijing_tz = pytz.timezone('Asia/Shanghai')
+                timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
+                print(f"{Colors.RED}🚫 🕒[{timestamp}] 所有API均不可用，程序退出 💤{Colors.RESET}")
                 break
             
         except KeyboardInterrupt:
-            timestamp = datetime.now().strftime("%H:%M:%S")
+            beijing_tz = pytz.timezone('Asia/Shanghai')
+            timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
             print(f"\n{Colors.BLUE}🎬 🕒[{timestamp}] 程序已退出 | 总成功: {Colors.GREEN}{success_count}次 🎉{Colors.RESET} | 总失败: {Colors.RED}{failure_count}次 ⚠️{Colors.RESET}")
             print(f"{Colors.YELLOW}⏳ 总运行时长: {int(time.time() - start_time)}秒{Colors.RESET}")
             break
         except Exception as e:
-            timestamp = datetime.now().strftime("%H:%M:%S")
+            beijing_tz = pytz.timezone('Asia/Shanghai')
+            timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
             print(f"{Colors.RED}🛑 🕒[{timestamp}] 主线程错误: {e} 🚨{Colors.RESET}")
             time.sleep(5)
 
