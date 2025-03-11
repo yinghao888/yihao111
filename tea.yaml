@@ -336,6 +336,9 @@ failure_count = 0
 start_time = time.time()
 last_stats_time = start_time  # 上次统计时间
 stats_interval = 60  # 每60秒统计一次
+minute_success = 0  # 每分钟成功次数
+minute_failure = 0  # 每分钟失败次数
+last_minute_start = start_time  # 每分钟开始时间
 
 # ANSI颜色代码
 class Colors:
@@ -358,7 +361,7 @@ def progress_bar(success, failure, width=50):
     return f"{Colors.GREEN}{'█' * success_width}{Colors.RED}{'█' * failure_width}{Colors.RESET} {success}/{total} ({success_ratio:.1%})"
 
 def chat_with_gaia(api_key, api_index, question, thread_id):
-    global success_count, failure_count
+    global success_count, failure_count, minute_success, minute_failure
     headers = {
         "Authorization": f"Bearer {api_key}",
         "accept": "application/json",
@@ -377,15 +380,17 @@ def chat_with_gaia(api_key, api_index, question, thread_id):
     retries = Retry(total=5, backoff_factor=2, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime("%H:%M:%S")
     try:
         response = session.post(URL, headers=headers, json=data, timeout=15)  # 延长超时时间
         response.raise_for_status()
         success_count += 1
+        minute_success += 1
         print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.GREEN}🎉【成功】线程-{thread_id} | 第{success_count}次成功 🌟{Colors.RESET}")
         return "SUCCESS"
     except requests.exceptions.RequestException as e:
         failure_count += 1
+        minute_failure += 1
         print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.RED}💥【失败】线程-{thread_id} | 第{failure_count}次失败 ⚠️{Colors.RESET}")
         if hasattr(e.response, 'status_code'):
             if e.response.status_code == 401:
@@ -394,13 +399,10 @@ def chat_with_gaia(api_key, api_index, question, thread_id):
             elif e.response.status_code == 402:
                 print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.YELLOW}⚠️【错误】API {api_index} | 状态: 402 | API额度不足，需要充值 🚫{Colors.RESET}")
                 return "FAILURE"
-            elif e.response.status_code == 404:
-                print(f"{Colors.PURPLE}🕒[{timestamp}] {Colors.YELLOW}⚠️【错误】API {api_index} | 状态: 404 | 端点 {URL} 可能无效 🚫{Colors.RESET}")
-                return "FAILURE"
         return "FAILURE"
 
 def auto_chat_concurrent():
-    global success_count, failure_count, start_time, last_stats_time
+    global success_count, failure_count, start_time, last_stats_time, minute_success, minute_failure, last_minute_start
     print(f"{Colors.BLUE}🚀 使用SOCKS5代理启动并发聊天（60线程，固定端点，每分钟统计） - 按 Ctrl+C 退出 ✨{Colors.RESET}")
     print(f"{Colors.CYAN}📊 总问题数: {len(QUESTIONS)} | 总API数: {len(API_KEYS)} 🌟{Colors.RESET}")
     print(f"{Colors.YELLOW}🔧 代理信息: {PROXY_USER}@{PROXY_HOST}:{PROXY_PORT}{Colors.RESET}")
@@ -433,11 +435,15 @@ def auto_chat_concurrent():
             elapsed_time = current_time - last_stats_time
             if elapsed_time >= stats_interval:
                 total_minutes = int((current_time - start_time) // 60) + 1
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = datetime.now().strftime("%H:%M:%S")
                 print(f"\n{Colors.BLUE}📈 🕒[{timestamp}] 第{total_minutes}分钟统计: {Colors.GREEN}成功: {success_count}次 🎉 {Colors.RED}失败: {failure_count}次 ⚠️{Colors.RESET}")
+                print(f"{Colors.CYAN}📊 本分钟完成: {Colors.GREEN}{minute_success}次成功 🎉 {Colors.RED}{minute_failure}次失败 ⚠️{Colors.RESET}")
                 print(f"{Colors.CYAN}📊 成功率: {progress_bar(success_count, failure_count)}{Colors.RESET}")
                 print(f"{Colors.YELLOW}⏳ 运行时长: {int(current_time - start_time)}秒{Colors.RESET}\n")
                 last_stats_time = current_time
+                last_minute_start = current_time  # 重置分钟开始时间
+                minute_success = 0  # 重置本分钟成功次数
+                minute_failure = 0  # 重置本分钟失败次数
             
             # 如果没有可用API，退出
             if not active_api_keys:
@@ -445,12 +451,12 @@ def auto_chat_concurrent():
                 break
             
         except KeyboardInterrupt:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now().strftime("%H:%M:%S")
             print(f"\n{Colors.BLUE}🎬 🕒[{timestamp}] 程序已退出 | 总成功: {Colors.GREEN}{success_count}次 🎉{Colors.RESET} | 总失败: {Colors.RED}{failure_count}次 ⚠️{Colors.RESET}")
             print(f"{Colors.YELLOW}⏳ 总运行时长: {int(time.time() - start_time)}秒{Colors.RESET}")
             break
         except Exception as e:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now().strftime("%H:%M:%S")
             print(f"{Colors.RED}🛑 🕒[{timestamp}] 主线程错误: {e} 🚨{Colors.RESET}")
             time.sleep(5)
 
