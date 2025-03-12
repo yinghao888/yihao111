@@ -2356,8 +2356,8 @@ QUESTIONS = [
 # SOCKS5代理配置
 PROXY_HOST = "2f7121246ab53bad.abcproxy.vip"
 PROXY_PORT = 4950
-PROXY_USER = "ZHkxhTUspz-zone-abc"
-PROXY_PASS = "76021475"
+PROXY_USER = "2842375593-zone-abc"
+PROXY_PASS = "3313076"
 
 # 固定 API 端点（请确认此 URL 是否正确）
 URL = "https://gaias.gaia.domains/v1/chat/completions"  # 请检查此端点是否有效
@@ -2468,7 +2468,8 @@ def send_request(api_key, api_index, question, req_id, active_api_keys):
                 with lock:
                     failure_count += 1
                     minute_failure += 1
-                print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d}{Colors.RESET}")
+                error_type = str(e.response.status_code) if hasattr(e.response, 'status_code') else "Timeout"
+                print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
                 if hasattr(e.response, 'status_code'):
                     if e.response.status_code == 401:
                         print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 401认证失败{Colors.RESET}")
@@ -2481,11 +2482,18 @@ def send_request(api_key, api_index, question, req_id, active_api_keys):
                         print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 404未找到端点{Colors.RESET}")
         
         threading.Thread(target=handle_response, daemon=True).start()
+    except requests.exceptions.RequestException as e:
+        with lock:
+            failure_count += 1
+            minute_failure += 1
+        error_type = str(e.response.status_code) if hasattr(e, 'response') and hasattr(e.response, 'status_code') else "Timeout"
+        print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
     except Exception as e:
         with lock:
             failure_count += 1
             minute_failure += 1
-        print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 发送错误: {e}{Colors.RESET}")
+        error_type = "Unknown"
+        print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
 
 # 滚动并发工作线程（极致发送速度）
 def scrolling_worker(active_api_keys):
