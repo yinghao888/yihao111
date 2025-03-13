@@ -1,54 +1,20 @@
 #!/usr/bin/env python3
-import requests
-import json
-import time
+import aiohttp
+import asyncio
 import random
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
-import socks
-import socket
+import time
 from datetime import datetime
 import pytz
-import queue
-import threading
 
 # 用户配置区域
 # -----------------------------------------------
-
-# 程序运行参数
-THREAD_COUNT = 60  # 工作线程数（可调整）
-MAX_TOKENS = 50    # 最大返回 token 数
-TIMEOUT = 15       # 请求超时时间（秒）
-RETRY_COUNT = 5    # 重试次数
-BACKOFF_FACTOR = 2  # 重试间隔因子
-STATS_INTERVAL = 60  # 统计间隔（秒）
+THREAD_COUNT = 30   # 并发任务数
+TIMEOUT = 20        # 请求超时时间（秒）
+STATS_INTERVAL = 60 # 统计间隔（秒）
+RETRY_COUNT = 3     # 重试次数
 
 # API Keys 列表（用户需填入自己的 API Key）
 API_KEYS = [
-    "gaia-Yzc2NDJiZTktZjgyNy00OWVkLWJlN2UtYWVhOGY4ZWU5OTc1-ghESNZURWQLKrJsO",
-    "gaia-OTZiZWY0YjgtZmFmZS00NDhhLWE5ZmUtYWViNDc1ODM2ODQ0-VSMT9_lgHNahI9OC",
-    "gaia-NzdiMzc4ODQtODRmNS00Mzk5LWFiYWItZmNmNDFjNTY4YTJl-lEJr954qr5C4BZe6",
-    "gaia-YWUzMDYzMTctMGIzYy00OGI0LThkNzAtM2QxMGI2YTJkYWNk-Fl6i_ndtO9KybidI",
-    "gaia-MzFiMjFkZmYtMzQ2Yy00NGMxLWI5ZTMtY2YzMWUzYzk3ZmJm-LH4GfVOzFx7ft13H",
-    "gaia-YzU3MzZjZWEtNTZiYi00Zjg5LWIwOTMtZjIzMzRmOWI3OTdi-VL-apkQ3uB84J3HN",
-    "gaia-MTBkZTEwYmYtYzZiOS00OWIwLTg0N2ItMjQyOTIwYjYxMTgy-YxL2gFJNPMbeyOiX",
-    "gaia-YWMzMTI2NTEtMmQ1Zi00ZmUxLTgwMjYtY2E1NTlhNzQ1YmRm-R27Ip_h4PqQjxnLE",
-    "gaia-MzJhNzcxMjgtMWU4Yy00NWNhLTk1MWItZTBkOWMwZGRkZGYx-PndGIgCFEpy45raD",
-    "gaia-MjE0YmE0MTUtYTIyNi00ODQ2LWJiMzktMmViNjg2ZDhmZmMz-OpCWtexcxbzyTYAE",
-    "gaia-ODUxMjViZWUtZDk5Yy00MTIwLWEzYjItY2UzNjU2Y2Y0NDkx-pm2tRn87egOAUHS8",
-    "gaia-OTI3M2ZlMDUtMzJiNy00ZDUwLWI2YjktNTg1MjdhN2I1NGVh-Rrpz7a_CANnel8Wo",
-    "gaia-ZTJhNDQ5YmEtOWYyYS00NWE3LThkMDQtYjg5MzhiZTBiYzEw-5fio-oY6GZF-AVHH",
-    "gaia-NzMwMDgxMjgtZjI2ZS00YjY4LWIxODMtM2VlZDczYzBhMGQw-kdwqyegMZHykxTLx",
-    "gaia-ZDU2MTllMjUtMThkMS00YTlkLTg3OTEtMWJiYzVkNmZlNjgx-GGrzDrm0ToMlgygd",
-    "gaia-M2EzNjYyMjEtMDRiZi00MjM4LTgwMzQtNzcwZTM2YmUyNTky-Z-byLVMpP1hFdlVz",
-    "gaia-ZGIxYzYyOTYtMDFjZi00NjI4LWEzMmItYjZlNDIyYjlhZTE4-MegiJjc4TOP1tg7y",
-    "gaia-NTViMTU0ODAtMThlMy00YTFmLWI0MGYtN2E0NTg0MjRmYzJj-bW7rm8gv2KKWPznq",
-    "gaia-MjhjYjhhODUtOTQ5OC00ODc3LWE1MTgtYzQyNTFmYmI4MWIy-hwYXwfak6UQmvPtV",
-    "gaia-MjNmNjM0ZDUtNGZmZS00ODhmLWI5NzQtMGE4YmMwNWRjMWQ1-BRudARy5TEAb5r7Q",
-    "gaia-OWQ0MWU0YjAtODJkYS00MTA3LWI1MjEtMTgxOGM3NWVhZGU3-CYYp24FC9aXPHDz4",
-    "gaia-OWIwOGRiYjQtYmM1MC00MjBmLWE0MjgtMzk2ODVkZjY2Y2Fj-6mXjit-oqcC5gLW1",
-    "gaia-Y2UyNjI1MTYtOWYwOS00ZmVlLWFjYTItOWQ3YjE3N2EzYTBk-ACkp0FKEmLE5UGGo",
-    "gaia-NTIyYTg4N2QtZjZkYy00NWU3LTg3NDctZmU3MTQ2NWQzZDNk-KexFBFk1HjqRXomk",
     "gaia-ODViNTE3MjMtZGY3MS00MWI5LWEwNjgtZTM1ZWE5ODcyMzY4-4xltDw5Dic7gV_jz",
     "gaia-NjRkZWY3NWYtOWQyZi00MGZlLTlkZjUtOWNhODY4NzIxMDk5-ne1LK3yDZJvBiGI7",
     "gaia-OWJiMDgzZmItYzgyNy00YzA5LWIxNDItMzkwMTFlYjM1YWZi-Yb2e2PLXih43gM01",
@@ -2344,240 +2310,143 @@ QUESTIONS = [
     "How to manage tasks in no-code apps?"
 ]
 
-# SOCKS5代理配置
-PROXY_HOST = "2f7121246ab53bad.abcproxy.vip"
-PROXY_PORT = 4950
-PROXY_USER = "2842375593-zone-abc"
-PROXY_PASS = "3313076"
+# 动态 SOCKS5 代理配置
+DYNAMIC_PROXY_HOST = "2f7121246ab53bad.abcproxy.vip"
+DYNAMIC_PROXY_PORT = 4950
+DYNAMIC_PROXY_USER = "fgasifkuga-zone-abc"
+DYNAMIC_PROXY_PASS = "afhuaiuf"
 
-# 固定 API 端点（请确认此 URL 是否正确）
-URL = "https://gaias.gaia.domains/v1/chat/completions"  # 请检查此端点是否有效
+# 固定 API 端点
+URL = "https://gaias.gaia.domains/v1/chat/completions"
 
 # -----------------------------------------------
 
-# 全局计数器和状态
+# 全局计数器和活动 API 列表
 success_count = 0
 failure_count = 0
-start_time = time.time()
-last_stats_time = start_time
-minute_success = 0
-minute_failure = 0
-last_minute_start = start_time
 total_traffic = 0
-minute_traffic = 0
-task_queue = queue.Queue(maxsize=10000)  # 任务队列，设置上限避免内存溢出
-lock = threading.Lock()  # 用于线程安全的锁
-request_id = 0  # 请求ID计数器
+request_id = 0
+api_index = 0  # 轮询 API Key
 
-# ANSI 颜色代码，用于美化输出
+# ANSI 颜色代码
 class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
-    CYAN = '\033[96m'
     PURPLE = '\033[95m'
     RESET = '\033[0m'
 
 # 美化工具类
 class DisplayUtils:
     @staticmethod
-    def progress_bar(success, failure, width=30):
-        total = success + failure
-        if total == 0:
-            return f"{Colors.CYAN}[暂无请求]{Colors.RESET}"
-        success_ratio = success / total
-        success_width = int(width * success_ratio)
-        failure_width = width - success_width
-        return f"{Colors.GREEN}{'█' * success_width}{Colors.RED}{'█' * failure_width}{Colors.RESET} {success_ratio:.1%}"
-
-    @staticmethod
     def format_traffic(bytes_count):
         if bytes_count < 1024:
             return f"{bytes_count}B"
         elif bytes_count < 1024 * 1024:
             return f"{bytes_count / 1024:.2f}KB"
-        elif bytes_count < 1024 * 1024 * 1024:
-            return f"{bytes_count / (1024 * 1024):.2f}MB"
         else:
-            return f"{bytes_count / (1024 * 1024 * 1024):.2f}GB"
+            return f"{bytes_count / (1024 * 1024):.2f}MB"
 
     @staticmethod
-    def divider(char="─", length=60):
-        return f"{Colors.CYAN}{char * length}{Colors.RESET}"
+    def divider(char="✨", length=60):
+        return f"{Colors.PURPLE}{char * length}{Colors.RESET}"
 
-# 设置 SOCKS5 代理
-def setup_socks5_proxy():
-    socks.set_default_proxy(socks.SOCKS5, PROXY_HOST, int(PROXY_PORT), username=PROXY_USER, password=PROXY_PASS)
-    socket.socket = socks.socksocket
-    print(f"{Colors.YELLOW}🔧 已设置 SOCKS5 代理: {PROXY_USER}@{PROXY_HOST}:{PROXY_PORT}{Colors.RESET}")
+# 发送请求函数（优化：顺序调用 API + 仅获取状态码）
+async def send_request(session, api_key, req_id):
+    global success_count, failure_count, total_traffic
+    
+    headers = {"Authorization": f"Bearer {api_key}"}
+    data = {"messages": [{"role": "user", "content": random.choice(QUESTIONS)}], "max_tokens": 1}  # 只请求 1 个 token
+    proxy = f"http://{DYNAMIC_PROXY_USER}:{DYNAMIC_PROXY_PASS}@{DYNAMIC_PROXY_HOST}:{DYNAMIC_PROXY_PORT}"
+    
+    request_traffic = len(str(headers)) + len(str(data))  # 计算请求流量
 
-# 单次 API 请求函数（只发送，不等待响应）
-def send_request(api_key, api_index, question, req_id, active_api_keys):
-    global success_count, failure_count, minute_success, minute_failure, total_traffic, minute_traffic
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "accept": "application/json",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "messages": [
-            {"role": "system", "content": "你是一个有用的助手。"},
-            {"role": "user", "content": question}
-        ],
-        "max_tokens": MAX_TOKENS
-    }
-    
-    session = requests.Session()
-    retries = Retry(total=RETRY_COUNT, backoff_factor=BACKOFF_FACTOR, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
-    session.mount("https://", HTTPAdapter(max_retries=retries))
-    
-    beijing_tz = pytz.timezone('Asia/Shanghai')
-    timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
-    try:
-        # 发送请求，不等待响应
-        response = session.post(URL, headers=headers, json=data, timeout=TIMEOUT, stream=True)
-        request_traffic = len(json.dumps(headers)) + len(json.dumps(data))
-        
-        # 异步处理响应
-        def handle_response():
-            global success_count, failure_count, minute_success, minute_failure, total_traffic, minute_traffic
-            try:
-                response.raise_for_status()
-                response_text = response.text
-                response_traffic = len(str(response.headers)) + len(response_text)
-                traffic = request_traffic + response_traffic
-                with lock:
-                    total_traffic += traffic
-                    minute_traffic += traffic
+    for attempt in range(RETRY_COUNT + 1):
+        try:
+            async with session.post(URL, headers=headers, json=data, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as response:
+                status = response.status
+                traffic = request_traffic + len(str(response.headers))  # 计算流量（仅头信息）
+
+                if status == 200:
                     success_count += 1
-                    minute_success += 1
-                print(f"{Colors.PURPLE}[{timestamp}] {Colors.GREEN}✔ 请求-{req_id:04d} | 成功 #{success_count:04d} | 流量: {DisplayUtils.format_traffic(traffic)}{Colors.RESET}")
-            except requests.exceptions.RequestException as e:
-                with lock:
+                    total_traffic += traffic
+                    print(f"{Colors.GREEN}✅ 请求-{req_id:04d} | API: {api_key} | 状态码: {status} | 流量: {DisplayUtils.format_traffic(traffic)} 🚀{Colors.RESET}")
+                    return
+                else:
                     failure_count += 1
-                    minute_failure += 1
-                error_type = str(e.response.status_code) if hasattr(e.response, 'status_code') else "Timeout"
-                print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
-                if hasattr(e.response, 'status_code'):
-                    if e.response.status_code == 401:
-                        print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 401认证失败{Colors.RESET}")
-                    elif e.response.status_code == 402:
-                        print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 402额度不足{Colors.RESET}")
-                        with lock:
-                            if api_key in active_api_keys:
-                                active_api_keys.remove(api_key)
-                    elif e.response.status_code == 404:
-                        print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 404未找到端点{Colors.RESET}")
+                    total_traffic += traffic
+                    print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 状态码: {status} 😢{Colors.RESET}")
+                    return
+        except asyncio.TimeoutError:
+            failure_count += 1
+            total_traffic += request_traffic  # 只计算请求流量
+            print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 超时 ⏰{Colors.RESET}")
+        except Exception:
+            failure_count += 1
+            total_traffic += request_traffic
+            print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 未知错误 😵{Colors.RESET}")
         
-        threading.Thread(target=handle_response, daemon=True).start()
-    except requests.exceptions.RequestException as e:
-        with lock:
-            failure_count += 1
-            minute_failure += 1
-        error_type = str(e.response.status_code) if hasattr(e, 'response') and hasattr(e.response, 'status_code') else "Timeout"
-        print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
-    except Exception as e:
-        with lock:
-            failure_count += 1
-            minute_failure += 1
-        error_type = "Unknown"
-        print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}✘ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {error_type}{Colors.RESET}")
+        if attempt < RETRY_COUNT:
+            await asyncio.sleep(2)
 
-# 滚动并发工作线程（极致发送速度）
-def scrolling_worker(active_api_keys):
-    while True:
-        try:
-            api_key, api_index, question, req_id = task_queue.get_nowait()
-            send_request(api_key, api_index, question, req_id, active_api_keys)
-            task_queue.task_done()
-        except queue.Empty:
-            time.sleep(0.001)  # 极短休眠，保持高吞吐量
-            continue  # 继续循环，不退出
+# 任务调度（顺序调用 API）
+async def worker():
+    global request_id, api_index
+    async with aiohttp.ClientSession() as session:
+        while True:
+            if not API_KEYS:
+                print(f"{Colors.RED}❌ 无 API Keys 可用 😭{Colors.RESET}")
+                return
+            
+            request_id += 1
+            api_key = API_KEYS[api_index]
+            await send_request(session, api_key, request_id)
+            
+            # 轮询 API Key
+            api_index = (api_index + 1) % len(API_KEYS)
 
-# 主程序：滚动并发
-def auto_chat_scrolling():
-    global success_count, failure_count, start_time, last_stats_time, minute_success, minute_failure, total_traffic, minute_traffic, request_id
-    
-    # 设置 SOCKS5 代理
-    setup_socks5_proxy()
-    
-    # 打印启动信息
-    print(f"{DisplayUtils.divider()}")
-    print(f"{Colors.BLUE}🚀 滚动并发发送系统启动{Colors.RESET}")
-    print(f"{Colors.CYAN}📊 配置: {len(QUESTIONS)}问题 | {len(API_KEYS)}API | {THREAD_COUNT}线程{Colors.RESET}")
-    print(f"{Colors.YELLOW}📡 端点: {URL}{Colors.RESET}")
-    print(f"{DisplayUtils.divider()}")
-    
-    active_api_keys = API_KEYS.copy()
-    
-    # 启动工作线程
-    threads = []
-    for i in range(THREAD_COUNT):
-        t = threading.Thread(target=scrolling_worker, args=(active_api_keys,), daemon=True)
-        t.start()
-        threads.append(t)
-    
-    # 主线程负责填充任务队列
+# 统计输出协程
+async def stats_printer():
+    start_time = time.time()
     while True:
-        try:
-            current_time = time.time()
-            if len(active_api_keys) == 0:
-                beijing_tz = pytz.timezone('Asia/Shanghai')
-                timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
-                print(f"{Colors.RED}[{timestamp}] 🚫 所有API不可用，程序退出{Colors.RESET}")
-                break
-            
-            # 快速填充任务队列
-            for _ in range(THREAD_COUNT):  # 每次填充等于线程数的任务
-                if not task_queue.full():
-                    with lock:
-                        request_id += 1
-                    api_key = random.choice(active_api_keys)
-                    api_index = API_KEYS.index(api_key)
-                    question = random.choice(QUESTIONS)
-                    task_queue.put_nowait((api_key, api_index, question, request_id))
-            
-            # 统计信息
-            elapsed_time = current_time - last_stats_time
-            if elapsed_time >= STATS_INTERVAL:
-                total_minutes = int((current_time - start_time) // 60) + 1
-                beijing_tz = pytz.timezone('Asia/Shanghai')
-                timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
-                print(f"\n{DisplayUtils.divider('═')}")
-                print(f"{Colors.BLUE}[{timestamp}] 📈 第{total_minutes}分钟统计{Colors.RESET}")
-                print(f"{Colors.CYAN}│ 成功: {Colors.GREEN}{minute_success:04d}{Colors.RESET} | 失败: {Colors.RED}{minute_failure:04d}{Colors.RESET} | 成功率: {DisplayUtils.progress_bar(minute_success, minute_failure)}{Colors.RESET}")
-                print(f"{Colors.CYAN}│ 本分钟流量: {Colors.YELLOW}{DisplayUtils.format_traffic(minute_traffic)}{Colors.RESET} | 累计流量: {Colors.YELLOW}{DisplayUtils.format_traffic(total_traffic)}{Colors.RESET}")
-                print(f"{Colors.CYAN}│ 总成功: {Colors.GREEN}{success_count:04d}{Colors.RESET} | 总失败: {Colors.RED}{failure_count:04d}{Colors.RESET} | 运行时长: {Colors.YELLOW}{int(current_time - start_time)}秒{Colors.RESET}")
-                print(f"{DisplayUtils.divider('═')}\n")
-                last_stats_time = current_time
-                last_minute_start = current_time
-                minute_success = 0
-                minute_failure = 0
-                minute_traffic = 0
-            
-            time.sleep(0.001)  # 主线程极短休眠，保持高频填充
-            
-        except KeyboardInterrupt:
-            beijing_tz = pytz.timezone('Asia/Shanghai')
-            timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
-            print(f"\n{DisplayUtils.divider('═')}")
-            print(f"{Colors.BLUE}[{timestamp}] 🎬 程序退出{Colors.RESET}")
-            print(f"{Colors.CYAN}│ 总成功: {Colors.GREEN}{success_count:04d}{Colors.RESET} | 总失败: {Colors.RED}{failure_count:04d}{Colors.RESET}")
-            print(f"{Colors.CYAN}│ 总流量: {Colors.YELLOW}{DisplayUtils.format_traffic(total_traffic)}{Colors.RESET}")
-            print(f"{Colors.CYAN}│ 运行时长: {Colors.YELLOW}{int(time.time() - start_time)}秒{Colors.RESET}")
-            print(f"{DisplayUtils.divider('═')}")
-            break
-        except Exception as e:
-            beijing_tz = pytz.timezone('Asia/Shanghai')
-            timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
-            print(f"{Colors.RED}[{timestamp}] 🛑 主线程错误: {e}{Colors.RESET}")
-            time.sleep(1)  # 出错时稍长休眠，避免无限循环错误
+        await asyncio.sleep(STATS_INTERVAL)
+        elapsed_time = int(time.time() - start_time)
+        timestamp = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%H:%M:%S")
+
+        print(f"\n{DisplayUtils.divider()}")
+        print(f"{Colors.BLUE}[{timestamp}] 📊 运行统计 🎉{Colors.RESET}")
+        print(f"{Colors.GREEN}✅ 总成功: {success_count} 🚀{Colors.RESET} | {Colors.RED}❌ 总失败: {failure_count} ⚡{Colors.RESET}")
+        print(f"{Colors.YELLOW}📡 总流量: {DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
+        print(f"{Colors.CYAN}⏱️ 运行时间: {elapsed_time} 秒{Colors.RESET}")
+        print(f"{DisplayUtils.divider()}\n")
+
+# 主程序
+async def main():
+    print(f"{DisplayUtils.divider()}")
+    print(f"{Colors.BLUE}🚀 并发请求系统启动 🎊{Colors.RESET}")
+    print(f"{Colors.CYAN}📊 API 数量: {len(API_KEYS)} | 线程: {THREAD_COUNT} | 目标: 高效调用{Colors.RESET}")
+    print(f"{DisplayUtils.divider()}")
+
+    if not API_KEYS:
+        print(f"{Colors.RED}❌ 错误: 无可用 API Key 😭{Colors.RESET}")
+        return
+
+    tasks = [worker() for _ in range(THREAD_COUNT)]
+    tasks.append(stats_printer())
+    await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     if not API_KEYS or not QUESTIONS:
-        print(f"{Colors.RED}❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据{Colors.RESET}")
+        print(f"{Colors.RED}❌ 错误: 请在 API_KEYS 和 QUESTIONS 中填入数据 😰{Colors.RESET}")
+    elif not (DYNAMIC_PROXY_HOST and DYNAMIC_PROXY_PORT):
+        print(f"{Colors.RED}❌ 错误: 请提供动态代理配置 😓{Colors.RESET}")
     else:
-        auto_chat_scrolling()
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            print(f"\n{DisplayUtils.divider()}")
+            print(f"{Colors.BLUE}🎬 程序已退出 👋{Colors.RESET}")
+            print(f"{Colors.GREEN}✅ 总成功: {success_count} 🚀{Colors.RESET} | {Colors.RED}❌ 总失败: {failure_count} ⚡{Colors.RESET}")
+            print(f"{Colors.YELLOW}📡 总流量: {DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
+            print(f"{DisplayUtils.divider()}")
