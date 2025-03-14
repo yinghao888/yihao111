@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import aiohttp
 import asyncio
+from itertools import cycle
 import random
 import time
 from datetime import datetime
@@ -9,9 +10,11 @@ import pytz
 # 用户配置区域
 # -----------------------------------------------
 THREAD_COUNT = 30   # 并发任务数
-TIMEOUT = 20        # 请求超时时间（秒）
+MAX_TOKENS = 5      # 最大返回 token 数
+TIMEOUT = 25        # 请求超时时间（秒）
 STATS_INTERVAL = 60 # 统计间隔（秒）
 RETRY_COUNT = 3     # 重试次数
+READ_BYTES = 5      # 仅读取前5字节
 
 # API Keys 列表（用户需填入自己的 API Key）
 API_KEYS = [
@@ -2310,7 +2313,7 @@ QUESTIONS = [
     "How to manage tasks in no-code apps?"
 ]
 
-# 动态 SOCKS5 代理配置
+# 动态 SOCKS5 代理配置（用户需根据自己的代理信息修改）
 DYNAMIC_PROXY_HOST = "2f7121246ab53bad.abcproxy.vip"
 DYNAMIC_PROXY_PORT = 4950
 DYNAMIC_PROXY_USER = "fgasifkuga-zone-abc"
@@ -2321,12 +2324,19 @@ URL = "https://gaias.gaia.domains/v1/chat/completions"
 
 # -----------------------------------------------
 
-# 全局计数器和活动 API 列表
+# 全局计数器和活动API列表
 success_count = 0
 failure_count = 0
+start_time = time.time()
 total_traffic = 0
+minute_success = 0
+minute_failure = 0
+minute_traffic = 0
+last_stats_time = start_time
 request_id = 0
-api_index = 0  # 轮询 API Key
+active_api_keys = API_KEYS.copy()  # 初始API列表
+api_key_cycle = cycle(active_api_keys)  # 轮询迭代器
+api_key_lock = asyncio.Lock()  # 锁保护API列表
 
 # ANSI 颜色代码
 class Colors:
@@ -2334,11 +2344,22 @@ class Colors:
     RED = '\033[91m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
+    CYAN = '\033[96m'
     PURPLE = '\033[95m'
     RESET = '\033[0m'
 
 # 美化工具类
 class DisplayUtils:
+    @staticmethod
+    def progress_bar(success, failure, width=30):
+        total = success + failure
+        if total == 0:
+            return f"{Colors.CYAN}🌟 暂无数据 🌟{Colors.RESET}"
+        success_ratio = success / total
+        success_width = int(width * success_ratio)
+        failure_width = width - success_width
+        return f"{Colors.GREEN}{'█' * success_width}{Colors.RED}{'█' * failure_width}{Colors.RESET} {success_ratio:.1%}"
+
     @staticmethod
     def format_traffic(bytes_count):
         if bytes_count < 1024:
@@ -2350,86 +2371,122 @@ class DisplayUtils:
 
     @staticmethod
     def divider(char="✨", length=60):
-        return f"{Colors.PURPLE}{char * length}{Colors.RESET}"
+        return f"{Colors.CYAN}{char * length}{Colors.RESET}"
 
-# 发送请求函数（优化：顺序调用 API + 仅获取状态码）
-async def send_request(session, api_key, req_id):
-    global success_count, failure_count, total_traffic
+# 单次请求函数
+async def send_request(session, api_key, api_index, question, req_id):
+    global success_count, failure_count, total_traffic, minute_success, minute_failure, minute_traffic, active_api_keys
     
     headers = {"Authorization": f"Bearer {api_key}"}
-    data = {"messages": [{"role": "user", "content": random.choice(QUESTIONS)}], "max_tokens": 1}  # 只请求 1 个 token
+    data = {"messages": [{"role": "user", "content": question}], "max_tokens": MAX_TOKENS}
     proxy = f"http://{DYNAMIC_PROXY_USER}:{DYNAMIC_PROXY_PASS}@{DYNAMIC_PROXY_HOST}:{DYNAMIC_PROXY_PORT}"
     
-    request_traffic = len(str(headers)) + len(str(data))  # 计算请求流量
-
+    beijing_tz = pytz.timezone('Asia/Shanghai')
+    timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
+    request_traffic = len(str(headers)) + len(str(data))
+    
     for attempt in range(RETRY_COUNT + 1):
         try:
             async with session.post(URL, headers=headers, json=data, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as response:
                 status = response.status
-                traffic = request_traffic + len(str(response.headers))  # 计算流量（仅头信息）
-
+                
                 if status == 200:
+                    response_sample = await response.content.read(READ_BYTES)
+                    traffic = request_traffic + len(str(response.headers)) + len(response_sample)
                     success_count += 1
+                    minute_success += 1
                     total_traffic += traffic
-                    print(f"{Colors.GREEN}✅ 请求-{req_id:04d} | API: {api_key} | 状态码: {status} | 流量: {DisplayUtils.format_traffic(traffic)} 🚀{Colors.RESET}")
+                    minute_traffic += traffic
+                    print(f"{Colors.PURPLE}[{timestamp}] {Colors.GREEN}✅ 请求-{req_id:04d} | 成功 #{success_count:04d} | 流量: {DisplayUtils.format_traffic(traffic)} 🚀{Colors.RESET}")
                     return
                 else:
+                    traffic = request_traffic + len(str(response.headers))
                     failure_count += 1
+                    minute_failure += 1
                     total_traffic += traffic
-                    print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 状态码: {status} 😢{Colors.RESET}")
+                    minute_traffic += traffic
+                    print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}❌ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: {status} 😢{Colors.RESET}")
+                    if status == 402:
+                        async with api_key_lock:
+                            if api_key in active_api_keys:
+                                active_api_keys.remove(api_key)
+                                print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 402余额不足，已剔除 🚨{Colors.RESET}")
+                                # 重置轮询迭代器
+                                global api_key_cycle
+                                api_key_cycle = cycle(active_api_keys if active_api_keys else [])
+                        return
+                    elif status == 404:
+                        print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 404未找到端点 🕵️{Colors.RESET}")
+                    elif status == 504:
+                        print(f"{Colors.PURPLE}[{timestamp}] {Colors.YELLOW}⚠ API {api_index} | 504网关超时 ⏳{Colors.RESET}")
                     return
         except asyncio.TimeoutError:
             failure_count += 1
-            total_traffic += request_traffic  # 只计算请求流量
-            print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 超时 ⏰{Colors.RESET}")
-        except Exception:
+            minute_failure += 1
+            traffic = request_traffic
+            total_traffic += traffic
+            minute_traffic += traffic
+            print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}❌ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: Timeout ⏰{Colors.RESET}")
+        except Exception as e:
             failure_count += 1
-            total_traffic += request_traffic
-            print(f"{Colors.RED}❌ 请求-{req_id:04d} | API: {api_key} | 未知错误 😵{Colors.RESET}")
+            minute_failure += 1
+            traffic = request_traffic
+            total_traffic += traffic
+            minute_traffic += traffic
+            print(f"{Colors.PURPLE}[{timestamp}] {Colors.RED}❌ 请求-{req_id:04d} | 失败 #{failure_count:04d} | 错误: Unknown 😵{Colors.RESET}")
         
         if attempt < RETRY_COUNT:
             await asyncio.sleep(2)
 
-# 任务调度（顺序调用 API）
+# 工作协程（轮询API）
 async def worker():
-    global request_id, api_index
+    global request_id, api_key_cycle
     async with aiohttp.ClientSession() as session:
         while True:
-            if not API_KEYS:
-                print(f"{Colors.RED}❌ 无 API Keys 可用 😭{Colors.RESET}")
-                return
-            
+            async with api_key_lock:
+                if not active_api_keys:
+                    print(f"{Colors.PURPLE}[{datetime.now(pytz.timezone('Asia/Shanghai')).strftime('%H:%M:%S')}] {Colors.RED}❌ 所有API已不可用，任务停止 😭{Colors.RESET}")
+                    break
+                api_key = next(api_key_cycle)
+                api_index = API_KEYS.index(api_key)
             request_id += 1
-            api_key = API_KEYS[api_index]
-            await send_request(session, api_key, request_id)
-            
-            # 轮询 API Key
-            api_index = (api_index + 1) % len(API_KEYS)
+            question = random.choice(QUESTIONS)
+            await send_request(session, api_key, api_index, question, request_id)
 
 # 统计输出协程
 async def stats_printer():
-    start_time = time.time()
+    global last_stats_time, minute_success, minute_failure, minute_traffic
     while True:
         await asyncio.sleep(STATS_INTERVAL)
-        elapsed_time = int(time.time() - start_time)
-        timestamp = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%H:%M:%S")
-
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+        total_minutes = int(elapsed_time // 60) + 1
+        beijing_tz = pytz.timezone('Asia/Shanghai')
+        timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
+        
         print(f"\n{DisplayUtils.divider()}")
-        print(f"{Colors.BLUE}[{timestamp}] 📊 运行统计 🎉{Colors.RESET}")
-        print(f"{Colors.GREEN}✅ 总成功: {success_count} 🚀{Colors.RESET} | {Colors.RED}❌ 总失败: {failure_count} ⚡{Colors.RESET}")
-        print(f"{Colors.YELLOW}📡 总流量: {DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
-        print(f"{Colors.CYAN}⏱️ 运行时间: {elapsed_time} 秒{Colors.RESET}")
+        print(f"{Colors.BLUE}[{timestamp}] 📊 第{total_minutes}分钟统计 🎉{Colors.RESET}")
+        print(f"{Colors.CYAN}│ 成功: {Colors.GREEN}{minute_success:04d} 🌈{Colors.RESET} | 失败: {Colors.RED}{minute_failure:04d} 💥{Colors.RESET} | 成功率: {DisplayUtils.progress_bar(minute_success, minute_failure)}{Colors.RESET}")
+        print(f"{Colors.CYAN}│ 本分钟流量: {Colors.YELLOW}{DisplayUtils.format_traffic(minute_traffic)} 📡{Colors.RESET} | 累计流量: {Colors.YELLOW}{DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
+        print(f"{Colors.CYAN}│ 总成功: {Colors.GREEN}{success_count:04d} 🎯{Colors.RESET} | 总失败: {Colors.RED}{failure_count:04d} ⚡{Colors.RESET} | 运行时长: {Colors.YELLOW}{int(elapsed_time)}秒 ⏱️{Colors.RESET}")
         print(f"{DisplayUtils.divider()}\n")
+        
+        last_stats_time = current_time
+        minute_success = 0
+        minute_failure = 0
+        minute_traffic = 0
 
 # 主程序
 async def main():
+    global active_api_keys, api_key_cycle
     print(f"{DisplayUtils.divider()}")
-    print(f"{Colors.BLUE}🚀 并发请求系统启动 🎊{Colors.RESET}")
-    print(f"{Colors.CYAN}📊 API 数量: {len(API_KEYS)} | 线程: {THREAD_COUNT} | 目标: 高效调用{Colors.RESET}")
+    print(f"{Colors.BLUE}🚀 异步并发发送系统启动啦 🎊{Colors.RESET}")
+    print(f"{Colors.CYAN}📊 配置: {len(QUESTIONS)}问题 | {len(API_KEYS)}API | {THREAD_COUNT}并发 🌐{Colors.RESET}")
+    print(f"{Colors.YELLOW}📡 端点: {URL} | 目标: 200+ 请求/分钟 🎈{Colors.RESET}")
     print(f"{DisplayUtils.divider()}")
 
-    if not API_KEYS:
-        print(f"{Colors.RED}❌ 错误: 无可用 API Key 😭{Colors.RESET}")
+    if not active_api_keys:
+        print(f"{Colors.RED}❌ 错误: 无可用API密钥 😭{Colors.RESET}")
         return
 
     tasks = [worker() for _ in range(THREAD_COUNT)]
@@ -2445,8 +2502,11 @@ if __name__ == "__main__":
         try:
             asyncio.run(main())
         except KeyboardInterrupt:
+            beijing_tz = pytz.timezone('Asia/Shanghai')
+            timestamp = datetime.now(beijing_tz).strftime("%H:%M:%S")
             print(f"\n{DisplayUtils.divider()}")
-            print(f"{Colors.BLUE}🎬 程序已退出 👋{Colors.RESET}")
-            print(f"{Colors.GREEN}✅ 总成功: {success_count} 🚀{Colors.RESET} | {Colors.RED}❌ 总失败: {failure_count} ⚡{Colors.RESET}")
-            print(f"{Colors.YELLOW}📡 总流量: {DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
+            print(f"{Colors.BLUE}[{timestamp}] 🎬 程序退出啦 👋{Colors.RESET}")
+            print(f"{Colors.CYAN}│ 总成功: {Colors.GREEN}{success_count:04d} 🎯{Colors.RESET} | 总失败: {Colors.RED}{failure_count:04d} ⚡{Colors.RESET}")
+            print(f"{Colors.CYAN}│ 总流量: {Colors.YELLOW}{DisplayUtils.format_traffic(total_traffic)} 💾{Colors.RESET}")
+            print(f"{Colors.CYAN}│ 运行时长: {Colors.YELLOW}{int(time.time() - start_time)}秒 ⏱️{Colors.RESET}")
             print(f"{DisplayUtils.divider()}")
